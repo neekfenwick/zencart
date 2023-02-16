@@ -121,6 +121,7 @@ $define = [
     'BOX_TOOLS_DEFINE_CONDITIONS' => 'Conditions of Use',
     'BOX_TOOLS_DEFINE_PAGES_EDITOR' => 'Define Pages Editor',
     'BOX_TOOLS_DEVELOPERS_TOOL_KIT' => 'Developers Tool Kit',
+    'BOX_TOOLS_EMAIL_EDITOR' => 'Email Editor',
     'BOX_TOOLS_EZPAGES' => 'EZ-Pages',
     'BOX_TOOLS_LAYOUT_CONTROLLER' => 'Layout Boxes Controller',
     'BOX_TOOLS_MAIL' => 'Send Email',

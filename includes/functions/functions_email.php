@@ -767,6 +767,173 @@
         return $file_holder;
     }
 
+  function zen_build_html_email_from_blade_template($module='default', $content='') {
+    global $messageStack, $current_page_base;
+    if (NULL == $current_page_base) $current_page_base = $module;
+
+    // If we were given an HTML email body instead of data model, return it.
+    if (!is_array($content) && substr($content, 0, 6) == '<html>') {
+      return [
+        'html' => $content,
+        'text' => strip_tags($content)
+      ];
+    }
+
+    $block = array();
+    if (is_array($content)) {
+      $block = $content;
+    } else {
+      $block['EMAIL_MESSAGE_HTML'] = $content;
+    }
+
+    // Identify and Read the template file for the type of message being sent
+    $langfolder = (strtolower($_SESSION['languages_code']) == 'en') ? '' : strtolower($_SESSION['languages_code']) . '/';
+
+    // Handle CSS
+    $block['EMAIL_COMMON_CSS'] = '';
+    $filesToTest = array(
+        DIR_FS_EMAIL_TEMPLATES . $langfolder . 'email_common.css',
+        DIR_FS_EMAIL_TEMPLATES . 'email_common.css'
+    );
+    $found = false;
+    foreach($filesToTest as $val) {
+        if (file_exists($val)) {
+            $block['EMAIL_COMMON_CSS'] = file_get_contents ($val);
+            $found = true;
+            break;
+        }
+    }
+    if (false === $found) {
+        trigger_error('Missing common email CSS file: ' . DIR_FS_EMAIL_TEMPLATES . 'email_common.css', E_USER_WARNING);
+    }
+
+    // Handle logo image
+    if (empty($block['EMAIL_LOGO_FILE'])) {
+        $domain = (IS_ADMIN_FLAG === true) ? HTTP_CATALOG_SERVER : HTTP_SERVER;
+        $block['EMAIL_LOGO_FILE'] = $domain . DIR_WS_CATALOG . 'email/' . EMAIL_LOGO_FILENAME;
+    }
+    if (!isset ($block['EMAIL_LOGO_ALT_TEXT']) || $block['EMAIL_LOGO_ALT_TEXT'] == '') $block['EMAIL_LOGO_ALT_TEXT'] = EMAIL_LOGO_ALT_TITLE_TEXT;
+    if (!isset ($block['EMAIL_LOGO_WIDTH']) || $block['EMAIL_LOGO_WIDTH'] == '') $block['EMAIL_LOGO_WIDTH'] = EMAIL_LOGO_WIDTH;
+    if (!isset ($block['EMAIL_LOGO_HEIGHT']) || $block['EMAIL_LOGO_HEIGHT'] == '') $block['EMAIL_LOGO_HEIGHT'] = EMAIL_LOGO_HEIGHT;
+
+    if (!defined ('EMAIL_EXTRA_HEADER_INFO')) define ('EMAIL_EXTRA_HEADER_INFO', '');
+    if (!isset ($block['EXTRA_HEADER_INFO']) || $block['EXTRA_HEADER_INFO'] == '') $block['EXTRA_HEADER_INFO'] = EMAIL_EXTRA_HEADER_INFO;
+
+    // Obtain the template file to be used
+    $template_filename_base = DIR_FS_EMAIL_TEMPLATES . $langfolder . "email_template_";
+    $template_filename_base_en = DIR_FS_EMAIL_TEMPLATES . "email_template_";
+    $template_filename = DIR_FS_EMAIL_TEMPLATES . $langfolder . "email_template_" . $current_page_base . ".blade.php"; //".html";
+
+    $filesToTest = array(
+       $template_filename_base . str_replace(array('_extra','_admin'),'',$module) . '.blade.php',
+       $template_filename_base_en . str_replace(array('_extra','_admin'),'',$module) . '.blade.php',
+       DIR_FS_EMAIL_TEMPLATES . $langfolder . "email_template_" . $current_page_base . ".blade.php",
+       DIR_FS_EMAIL_TEMPLATES . "email_template_" . $current_page_base . ".blade.php",
+       (isset($block['EMAIL_TEMPLATE_FILENAME']) && $block['EMAIL_TEMPLATE_FILENAME'] != '' ? $block['EMAIL_TEMPLATE_FILENAME'] . '.blade.php' : NULL),
+       $template_filename_base . 'default' . '.blade.php',
+       $template_filename_base_en . 'default' . '.blade.php',
+       );
+    $html_template_filename = '';
+    $text_template_filename = '';
+    foreach($filesToTest as $val) {
+      if (empty($val)) { continue; }
+      if (!$html_template_filename && file_exists($val)) {
+        $html_template_filename = $val;
+      }
+      // Note: Cannot use '.' in filename, Blade replaces with '/', so use '_' instead.
+      $try_txt_filename = str_replace('.blade.php', '_text.blade.php', $html_template_filename);
+      if (!$text_template_filename && file_exists($try_txt_filename)) {
+        $text_template_filename = $try_txt_filename;
+      }
+    }
+    if (!$html_template_filename) {
+      if(isset($messageStack)) $messageStack->add('header','ERROR: The email template file for (' . $template_filename_base . ') or (' . $template_filename . ') cannot be found.', 'caution');
+      return ''; // couldn't find template file, so return an empty string for html message.
+    }
+
+    if (!$fh = fopen($template_filename, 'rb')) {   // note: the 'b' is for compatibility with Windows systems
+      if (isset($messageStack)) $messageStack->add('header','ERROR: The email template file (' . $template_filename_base . ') or (' . $template_filename . ') cannot be opened', 'caution');
+    }
+
+    // $file_holder = fread($fh, filesize($template_filename));
+    fclose($fh);
+
+    //strip linebreaks and tabs out of the template
+//  $file_holder = str_replace(array("\r\n", "\n", "\r", "\t"), '', $file_holder);
+    // $file_holder = str_replace(array("\t"), ' ', $file_holder);
+
+    if (!defined('HTTP_CATALOG_SERVER')) define('HTTP_CATALOG_SERVER', HTTP_SERVER);
+    //check for some specifics that need to be included with all messages
+    if (!isset($block['EMAIL_STORE_NAME']) || $block['EMAIL_STORE_NAME'] == '')     $block['EMAIL_STORE_NAME']  = STORE_NAME;
+    if (!isset($block['EMAIL_STORE_URL']) || $block['EMAIL_STORE_URL'] == '')       $block['EMAIL_STORE_URL']   = '<a href="'.HTTP_CATALOG_SERVER . DIR_WS_CATALOG.'">'.STORE_NAME.'</a>';
+    if (!isset($block['EMAIL_STORE_OWNER']) || $block['EMAIL_STORE_OWNER'] == '')   $block['EMAIL_STORE_OWNER'] = STORE_OWNER;
+    if (!isset($block['EMAIL_FOOTER_COPYRIGHT']) || $block['EMAIL_FOOTER_COPYRIGHT'] == '') $block['EMAIL_FOOTER_COPYRIGHT'] = EMAIL_FOOTER_COPYRIGHT;
+    if (!isset($block['EMAIL_DISCLAIMER']) || $block['EMAIL_DISCLAIMER'] == '')     $block['EMAIL_DISCLAIMER']  = sprintf(EMAIL_DISCLAIMER, '<a href="mailto:' . STORE_OWNER_EMAIL_ADDRESS . '">'. STORE_OWNER_EMAIL_ADDRESS .'</a>');
+    if (!isset($block['EMAIL_SPAM_DISCLAIMER']) || $block['EMAIL_SPAM_DISCLAIMER'] == '')   $block['EMAIL_SPAM_DISCLAIMER']  = EMAIL_SPAM_DISCLAIMER;
+    if (!isset($block['EMAIL_DATE_SHORT']) || $block['EMAIL_DATE_SHORT'] == '')     $block['EMAIL_DATE_SHORT']  = zen_date_short(date("Y-m-d"));
+    if (!isset($block['EMAIL_DATE_LONG']) || $block['EMAIL_DATE_LONG'] == '')       $block['EMAIL_DATE_LONG']   = zen_date_long(date("Y-m-d"));
+    if (!isset($block['BASE_HREF']) || $block['BASE_HREF'] == '') $block['BASE_HREF'] = HTTP_CATALOG_SERVER . DIR_WS_CATALOG;
+    if (!isset($block['CHARSET']) || $block['CHARSET'] == '') $block['CHARSET'] = CHARSET;
+    //  if (!isset($block['EMAIL_STYLESHEET']) || $block['EMAIL_STYLESHEET'] == '')      $block['EMAIL_STYLESHEET']       = str_replace(array("\r\n", "\n", "\r"), "",@file_get_contents(DIR_FS_EMAIL_TEMPLATES.'stylesheet.css'));
+
+    if (!isset($block['EXTRA_INFO']))  $block['EXTRA_INFO']  = '';
+    if (substr($module,-6) != '_extra' && $module != 'contact_us' && $module != 'ask_a_question')  $block['EXTRA_INFO']  = '';
+
+    $block['COUPON_BLOCK'] = '';
+    if (isset($block['COUPON_TEXT_VOUCHER_IS']) && $block['COUPON_TEXT_VOUCHER_IS'] != '' && isset($block['COUPON_TEXT_TO_REDEEM']) && $block['COUPON_TEXT_TO_REDEEM'] != '') {
+      $block['COUPON_BLOCK'] = '<div class="coupon-block">' . $block['COUPON_TEXT_VOUCHER_IS'] . $block['COUPON_DESCRIPTION'] . '<br>' . $block['COUPON_TEXT_TO_REDEEM'] . '<span class="coupon-code">' . $block['COUPON_CODE'] . '</span></div>';
+    }
+
+    $block['GV_BLOCK'] = '';
+      if ( (isset($block['GV_ANNOUNCE']) && $block['GV_ANNOUNCE'] != '') && (isset($block['GV_REDEEM']) && $block['GV_REDEEM'] != '') ) {
+          $block['GV_BLOCK'] = '<div class="gv-block">' . $block['GV_ANNOUNCE'] . '<br>' . $block['GV_REDEEM'] . '</div>';
+      }
+
+    //prepare the "unsubscribe" link:
+    if (IS_ADMIN_FLAG === true) { // is this admin version, or catalog?
+      $block['UNSUBSCRIBE_LINK'] = str_replace("\n",'',TEXT_UNSUBSCRIBE) . ' <a href="' . zen_catalog_href_link(FILENAME_UNSUBSCRIBE, "addr=" . $block['EMAIL_TO_ADDRESS']) . '">' . zen_catalog_href_link(FILENAME_UNSUBSCRIBE, "addr=" . $block['EMAIL_TO_ADDRESS']) . '</a>';
+    } else {
+      $block['UNSUBSCRIBE_LINK'] = str_replace("\n",'',TEXT_UNSUBSCRIBE) . ' <a href="' . zen_href_link(FILENAME_UNSUBSCRIBE, "addr=" . $block['EMAIL_TO_ADDRESS']) . '">' . zen_href_link(FILENAME_UNSUBSCRIBE, "addr=" . $block['EMAIL_TO_ADDRESS']) . '</a>';
+    }
+
+    // Use Laravel Blade engine to render the email templates as if they were views.
+    $path_info = pathinfo($html_template_filename);
+    $cache = DIR_FS_SQL_CACHE;
+
+    $blade = new Blade($path_info['dirname'], $cache);
+
+    // filenames need to have the path and suffix stripped so the Blade engine can find them
+    // $html_template_filename = str_replace(DIR_FS_EMAIL_TEMPLATES, '', $html_template_filename);
+    $html_template_filename = str_replace('.blade.php', '', $path_info['basename']);
+    // try {
+    $html_output = $blade->view()->make($html_template_filename, $block)->render();
+    // } catch (ParseError $ex) {
+    //   throw new Exception("There was a problem parsing your HTML template for $module! {$ex->getMessage()}", 0, $ex);
+    // }
+
+    if (empty($block['EXTRA_INFO']) || empty(trim($block['EXTRA_INFO']))) {
+      $html_output = preg_replace('/<div class="extra-info">\s?\$EXTRA_INFO\s?<\/div>/', '', $html_output);
+    }
+
+    // If we found a specific text template, use that, otherwise strip the rendered HTML
+    if ($text_template_filename) {
+      $text_template_filename = str_replace(DIR_FS_EMAIL_TEMPLATES, '', $text_template_filename);
+      $text_template_filename = str_replace('.blade.php', '', $text_template_filename);
+      $text_output = $blade->view()->make($text_template_filename, $block)->render();
+    } else {
+      // This is likely to produce a poor result
+      $text_output = strip_tags($html_output);
+      $text_output = html_entity_decode($html_output); // Recover e.g. &#039; back to '
+    }
+
+    //DEBUG -- to display preview on-screen
+    if (EMAIL_SYSTEM_DEBUG === 'preview') echo $html_output;
+
+    return [
+      'html' => $html_output,
+      'text' => $text_output
+    ];
+  }
 
     /**
      * Function to build array of additional email content collected and sent on admin-copies of emails:

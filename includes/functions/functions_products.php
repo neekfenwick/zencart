@@ -15,7 +15,7 @@
  * @param int $language_id (optional)
  * @return queryFactoryResult
  */
-function zen_get_product_details($product_id, $language_id = null)
+function zen_get_product_details(int $product_id, int $language_id = null) : queryFactoryResult
 {
     global $db, $zco_notifier;
 
@@ -36,7 +36,7 @@ function zen_get_product_details($product_id, $language_id = null)
  * @param int $product_id
  * @param null $product_info
  */
-function zen_product_set_header_response($product_id, $product_info = null)
+function zen_product_set_header_response(int $product_id, queryFactoryResult $product_info = null)
 {
     global $zco_notifier, $breadcrumb, $robotsNoIndex;
 
