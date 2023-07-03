@@ -85,6 +85,8 @@ class order extends base
     public $products = [];
     /**
      * $products_ordered a plain text string containing the details of products order for email
+     * TODO: Probably replace this with product array or simply use $this->products instead in the email data.
+     * The template would then iterate and do the heavy lifting.
      * @var string
      */
     public $products_ordered;
