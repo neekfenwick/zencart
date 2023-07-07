@@ -275,11 +275,13 @@ function selectAll(FormName, SelectBox) {
     $i = 0;
     foreach ($audience as $key => $value) {
       $i++;
-      $html_msg['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
-      $html_msg['EMAIL_FIRST_NAME'] = $value['firstname'];
-      $html_msg['EMAIL_LAST_NAME'] = $value['lastname'];
-      $html_msg['EMAIL_MESSAGE_HTML'] = $this->content_html;
-      zen_mail($value['firstname'] . ' ' . $value['lastname'], $value['email_address'], $this->title, $this->content, STORE_NAME, EMAIL_FROM, $html_msg, 'product_notification', '');
+      $block = [];
+      $block['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
+      $block['EMAIL_FIRST_NAME'] = $value['firstname'];
+      $block['EMAIL_LAST_NAME'] = $value['lastname'];
+      $block['EMAIL_MESSAGE_TEXT'] = $this->content;
+      $block['EMAIL_MESSAGE_HTML'] = $this->content_html;
+      zen_mail_from_template($value['firstname'] . ' ' . $value['lastname'], $value['email_address'], $this->title, $block, STORE_NAME, EMAIL_FROM, 'product_notification', '');
       echo zen_image(DIR_WS_ICONS . 'tick.gif', $value['email_address']);
 
       //force output to the screen to show status indicator each time a message is sent...
