@@ -56,17 +56,15 @@ if (!empty($action)) {
                     $customer = new Customer($customers_id);
                     $old = $customer->getData('customers_authorization');
                     $custinfo = $customer->setCustomerAuthorizationStatus($customers_authorization);
-                    if ((int)CUSTOMERS_APPROVAL_AUTHORIZATION > 0 && (int)$_POST['current'] > 0 && $old != $customers_authorization) {
+                    if ((int)CUSTOMERS_APPROVAL_AUTHORIZATION > 0 && (int)$_POST['current_status'] > 0 && $old != $customers_authorization) {
                         $message = EMAIL_CUSTOMER_STATUS_CHANGE_MESSAGE;
-                        $html_msg['EMAIL_MESSAGE_HTML'] = EMAIL_CUSTOMER_STATUS_CHANGE_MESSAGE;
-                        zen_mail(
+                        zen_mail_from_template(
                             $custinfo['customers_firstname'] . ' ' . $custinfo['customers_lastname'],
                             $custinfo['customers_email_address'],
                             EMAIL_CUSTOMER_STATUS_CHANGE_SUBJECT,
                             $message,
                             STORE_NAME,
                             EMAIL_FROM,
-                            $html_msg,
                             'default'
                         );
                     }
@@ -402,16 +400,15 @@ if (!empty($action)) {
                     }
                     $customer->setPassword($password_new);
 
-                    $message = EMAIL_CUSTOMER_PWD_CHANGE_MESSAGE . "\n\n" . $password_new . "\n\n\n";
-                    $html_msg['EMAIL_MESSAGE_HTML'] = nl2br($message);
-                    zen_mail(
+                    $message = EMAIL_CUSTOMER_PWD_CHANGE_MESSAGE . "\n\n" . $password_new;
+                    // $html_msg['EMAIL_MESSAGE_HTML'] = nl2br($message);
+                    zen_mail_from_template(
                         $custinfo['customers_firstname'] . ' ' . $custinfo['customers_lastname'],
                         $custinfo['customers_email_address'],
                         EMAIL_CUSTOMER_PWD_CHANGE_SUBJECT,
                         $message,
                         STORE_NAME,
                         EMAIL_FROM,
-                        $html_msg,
                         'default'
                     );
                     $userList = zen_get_users($_SESSION['admin_id']);
@@ -421,16 +418,15 @@ if (!empty($action)) {
                             EMAIL_CUSTOMER_PWD_CHANGE_MESSAGE_FOR_ADMIN,
                             $custinfo['customers_firstname'] . ' ' . $custinfo['customers_lastname'] . ' ' . $custinfo['customers_email_address'],
                             $adminUser
-                        ) . "\n";
-                    $html_msg['EMAIL_MESSAGE_HTML'] = nl2br($message);
-                    zen_mail(
+                        );
+                    // $html_msg['EMAIL_MESSAGE_HTML'] = nl2br($message);
+                    zen_mail_from_template(
                         $userDetails['name'],
                         $userDetails['email'],
                         EMAIL_CUSTOMER_PWD_CHANGE_SUBJECT,
                         $message,
                         STORE_NAME,
                         EMAIL_FROM,
-                        $html_msg,
                         'default'
                     );
 

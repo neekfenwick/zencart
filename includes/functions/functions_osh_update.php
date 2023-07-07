@@ -137,7 +137,7 @@ function zen_update_orders_history($orders_id, $message = '', $updated_by = null
                 }
 
                 if ($notify_customer == 1) {
-                    zen_mail_from_template($osh_info->fields['customers_name'], $osh_info->fields['customers_email_address'], $email_subject, STORE_NAME, EMAIL_FROM, $html_msg, 'order_status', $filename);
+                    zen_mail_from_template($osh_info->fields['customers_name'], $osh_info->fields['customers_email_address'], $email_subject, $html_msg, STORE_NAME, EMAIL_FROM, 'order_status', $filename);
                 }
 
                 // PayPal Trans ID, if any
@@ -157,7 +157,7 @@ function zen_update_orders_history($orders_id, $message = '', $updated_by = null
                     $send_extra_emails_to = (string)SEND_EXTRA_ORDERS_STATUS_ADMIN_EMAILS_TO;
                 }
                 if (!empty($send_extra_emails_to)) {
-                    zen_mail_from_template('', $send_extra_emails_to, SEND_EXTRA_ORDERS_STATUS_ADMIN_EMAILS_TO_SUBJECT . ' ' . $email_subject, STORE_NAME, EMAIL_FROM, $html_msg, 'order_status_extra', $filename);
+                    zen_mail_from_template('', $send_extra_emails_to, SEND_EXTRA_ORDERS_STATUS_ADMIN_EMAILS_TO_SUBJECT . ' ' . $email_subject, $html_msg, STORE_NAME, EMAIL_FROM, 'order_status_extra', $filename);
                 }
             }
     

@@ -11,11 +11,11 @@
 /**
  * Query product details, returning a db QueryFactory response to iterate through
  *
- * @param int $product_id
- * @param int $language_id (optional)
+ * @param string $product_id
+ * @param int    $language_id (optional)
  * @return queryFactoryResult
  */
-function zen_get_product_details(int $product_id, int $language_id = null) : queryFactoryResult
+function zen_get_product_details(string $product_id, int $language_id = null) : queryFactoryResult
 {
     global $db, $zco_notifier;
 

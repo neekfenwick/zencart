@@ -95,6 +95,8 @@ if ($isExpired) {
 // FIX HERE AND GIVE ERROR PAGE FOR MISSING FILE
 // Die if file is not there
 if (!$file_exists) {
+    $msg = 'DOWNLOAD PROBLEM: Problems detected with download for ' . $source_directory . $origin_filename . '(' . $service . ')' . ' because the file could not be found on the server. If the file exists, then its permissions are too low for PHP to access it. Contact your hosting company for specific help in determining correct permissions to make the file readable by PHP.';
+    zen_mail_from_template('', STORE_OWNER_EMAIL_ADDRESS, ERROR_CUSTOMER_DOWNLOAD_FAILURE, $msg, STORE_NAME, EMAIL_FROM);
     die('Sorry. File not found. Please contact the webmaster to report this error.<br>c/f: ' . $origin_filename);
 }
 
@@ -114,14 +116,9 @@ if (@ini_get('zlib.output_compression')) {
     @ini_set('zlib.output_compression', 'Off');
 }
 
-if (!$file_exists) {
-    $msg = 'DOWNLOAD PROBLEM: Problems detected with download for ' . $source_directory . $origin_filename . '(' . $service . ')' . ' because the file could not be found on the server. If the file exists, then its permissions are too low for PHP to access it. Contact your hosting company for specific help in determining correct permissions to make the file readable by PHP.';
-    zen_mail('', STORE_OWNER_EMAIL_ADDRESS, ERROR_CUSTOMER_DOWNLOAD_FAILURE, $msg, STORE_NAME, EMAIL_FROM);
-}
-
 if ($downloadFilesize < 1 && $service == 'local') {
     $msg = 'DOWNLOAD PROBLEM: Problem detected with download for ' . $source_directory . $origin_filename . ' because the server is preventing PHP from reading the file size attributes, or the file is actually 0 bytes in size (which suggests the uploaded file is damaged or incomplete). Perhaps its permissions are too low for PHP to access it? Contact your hosting company for specific help in determining correct permissions to allow PHP to stat the file using the filesize() function.';
-    zen_mail('', STORE_OWNER_EMAIL_ADDRESS, ERROR_CUSTOMER_DOWNLOAD_FAILURE, $msg, STORE_NAME, EMAIL_FROM);
+    zen_mail_from_template('', STORE_OWNER_EMAIL_ADDRESS, ERROR_CUSTOMER_DOWNLOAD_FAILURE, $msg, STORE_NAME, EMAIL_FROM);
 }
 
 /**
@@ -155,7 +152,7 @@ $hfile = $hline = '';
 if (headers_sent($hfile, $hline)) {
     $msg = 'DOWNLOAD PROBLEM: Cannot begin download for ' . $origin_filename . ' because HTTP headers were already sent. This indicates a PHP error, probably in a language file.  Start by checking ' . $hfile . ' on line ' . $hline . '.';
     error_log($msg);
-    zen_mail('', STORE_OWNER_EMAIL_ADDRESS, ERROR_CUSTOMER_DOWNLOAD_FAILURE, $msg, STORE_NAME, EMAIL_FROM);
+    zen_mail_from_template('', STORE_OWNER_EMAIL_ADDRESS, ERROR_CUSTOMER_DOWNLOAD_FAILURE, $msg, STORE_NAME, EMAIL_FROM);
 }
 
 if ($browser_headers_override == '') {
