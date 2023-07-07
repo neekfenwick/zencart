@@ -79,25 +79,15 @@ if (isset($_GET['action']) && ($_GET['action'] === 'send')) {
                 $send_to_name  = trim(preg_replace('/\<[^*]*/', '', $send_to_array[$_POST['send_to']]));
             }
 
-            // Prepare extra-info details
+            // Prepare email template data
+            $html_msg['EXTRA_INFO'] = $extra_info;
             $extra_info = email_collect_extra_info($name, $email_address, $customer_name, $customer_email, $customer_telephone);
-            // Prepare Text-only portion of message
-            $text_message = OFFICE_FROM . "\t" . $name . "\n" .
-              OFFICE_EMAIL . "\t" . $email_address . "\n";
-            if (!empty($telephone)) {
-                $text_message .= OFFICE_LOGIN_PHONE . "\t" . $telephone . "\n";
-            }
-            $text_message .= "\n" .
-            '------------------------------------------------------' . "\n\n" .
-            $enquiry .  "\n\n" .
-            '------------------------------------------------------' . "\n\n" .
-            $extra_info['TEXT'];
-            // Prepare HTML-portion of message
-            $html_msg['EMAIL_MESSAGE_HTML'] = $enquiry;
-            $html_msg['CONTACT_US_OFFICE_FROM'] = OFFICE_FROM . ' ' . $name . '<br>' . OFFICE_EMAIL . '(' . $email_address . ')';
-            $html_msg['EXTRA_INFO'] = $extra_info['HTML'];
+            $html_msg['EMAIL_MESSAGE'] = $enquiry;
+            $html_msg['CONTACT_US_OFFICE_FROM'] = OFFICE_FROM . "\t$name\n" .
+                OFFICE_EMAIL . "\t$email_address\n" .
+                (!empty($telephone) ? OFFICE_LOGIN_PHONE . "\t$telephone\n" : '');
             // Send message
-            zen_mail($send_to_name, $send_to_email, EMAIL_SUBJECT, $text_message, $name, $email_address, $html_msg, 'contact_us');
+            zen_mail_from_template($send_to_name, $send_to_email, EMAIL_SUBJECT, $html_msg, $name, $email_address, 'contact_us');
         }
         zen_redirect(zen_href_link(FILENAME_CONTACT_US, 'action=success', 'SSL'));
     } else {

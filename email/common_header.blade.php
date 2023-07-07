@@ -10,7 +10,7 @@
 
 </head>
 
-<body id="{{ $MODULE_NAME">
+<body id="{{ $MODULE_NAME }}">
 <div class="holder">
 
   <!-- Header Section -->
