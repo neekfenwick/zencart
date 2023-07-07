@@ -2,4 +2,5 @@
 {!! $EMAIL_SUBJECT !!},
 
 {!! $EMAIL_MESSAGE !!}
+
 @include ('common_footer_text')

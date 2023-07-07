@@ -1,5 +1,3 @@
-
-
 {!! $EMAIL_FOOTER_COPYRIGHT !!}
 
 {!! $EMAIL_DISCLAIMER !!}

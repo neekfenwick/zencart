@@ -1,4 +1,4 @@
-@include ('html_common_header')
+@include ('common_header')
 
   <!-- Content Section -->
   <div class="content">

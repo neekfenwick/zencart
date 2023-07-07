@@ -419,7 +419,6 @@ if (!empty($action)) {
                             $custinfo['customers_firstname'] . ' ' . $custinfo['customers_lastname'] . ' ' . $custinfo['customers_email_address'],
                             $adminUser
                         );
-                    // $html_msg['EMAIL_MESSAGE_HTML'] = nl2br($message);
                     zen_mail_from_template(
                         $userDetails['name'],
                         $userDetails['email'],
