@@ -120,11 +120,13 @@ class newsletter {
 
     foreach ($audience as $item) {
       $i++;
-      $html_msg['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
-      $html_msg['EMAIL_FIRST_NAME'] = $item['customers_firstname'];
-      $html_msg['EMAIL_LAST_NAME'] = $item['customers_lastname'];
-      $html_msg['EMAIL_MESSAGE_HTML'] = $this->content_html;
-      zen_mail($item['customers_firstname'] . ' ' . $item['customers_lastname'], $item['customers_email_address'], $this->title, $this->content, STORE_NAME, EMAIL_FROM, $html_msg, 'newsletters');
+      $block = [];
+      $block['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
+      $block['EMAIL_FIRST_NAME'] = $item['customers_firstname'];
+      $block['EMAIL_LAST_NAME'] = $item['customers_lastname'];
+      $block['EMAIL_MESSAGE_TEXT'] = $this->content;
+      $block['EMAIL_MESSAGE_HTML'] = $this->content_html;
+      zen_mail_from_template($item['customers_firstname'] . ' ' . $item['customers_lastname'], $item['customers_email_address'], $this->title, $block, STORE_NAME, EMAIL_FROM, 'newsletters');
       echo zen_image(DIR_WS_ICONS . 'tick.gif', $item['customers_email_address']);
 
       //force output to the screen to show status indicator each time a message is sent...

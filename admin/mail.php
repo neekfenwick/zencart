@@ -52,8 +52,9 @@ if (($action == 'send_email_to_user') && isset($_POST['customers_email_address']
     $message = $_POST['message'];
   }
 
-  $html_msg['EMAIL_MESSAGE_HTML'] = $message_html;
-  $html_msg['EMAIL_MESSAGE_TEXT'] = $message_text;
+  $block = [];
+  $block['EMAIL_MESSAGE_HTML'] = $message_html;
+  $block['EMAIL_MESSAGE_TEXT'] = $message_text;
   $attachment_file = $_POST['attachment_file'];
   $attachment_fname = basename($_POST['attachment_file']);
   $attachment_filetype = $_POST['attachment_filetype'];
@@ -62,10 +63,10 @@ if (($action == 'send_email_to_user') && isset($_POST['customers_email_address']
   //echo'EOF-attachments_list='.$attachment_file.'->'.$attachment_filetype;
   $recip_count = 0;
   foreach ($mail as $item) {
-    $html_msg['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
-    $html_msg['EMAIL_FIRST_NAME'] = $item['customers_firstname'];
-    $html_msg['EMAIL_LAST_NAME'] = $item['customers_lastname'];
-    $rc = zen_mail_from_template($item['customers_firstname'] . ' ' . $item['customers_lastname'], $item['customers_email_address'], $subject, $html_msg, STORE_NAME, $from, 'direct_email', array('file' => $attachment_file, 'name' => basename($attachment_file), 'mime_type' => $attachment_filetype));
+    $block['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
+    $block['EMAIL_FIRST_NAME'] = $item['customers_firstname'];
+    $block['EMAIL_LAST_NAME'] = $item['customers_lastname'];
+    $rc = zen_mail_from_template($item['customers_firstname'] . ' ' . $item['customers_lastname'], $item['customers_email_address'], $subject, $block, STORE_NAME, $from, 'direct_email', array('file' => $attachment_file, 'name' => basename($attachment_file), 'mime_type' => $attachment_filetype));
     if ($rc === '') $recip_count++;
   }
   if ($recip_count > 0) {
