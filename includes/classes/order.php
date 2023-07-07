@@ -54,20 +54,10 @@ class order extends base
      */
     public $doStockDecrement;
     /**
-     * $extra_header_text is a string containing header text to be added to email
-     * @var string
-     */
-    public $extra_header_text;
-    /**
      * $email_low_stock is the contents of the email to be sent if stock is low
      * @var string
      */
     public $email_low_stock;
-    /**
-     * $email_order_message is a string containing the store order message
-     * @var string
-     */
-    public $email_order_message;
     /**
      * $info is an array containing general information about the order
      * @var array
@@ -83,23 +73,6 @@ class order extends base
      * @var array 
      */
     public $products = [];
-    /**
-     * $products_ordered a plain text string containing the details of products order for email
-     * TODO: Probably replace this with product array or simply use $this->products instead in the email data.
-     * The template would then iterate and do the heavy lifting.
-     * @var string
-     */
-    public $products_ordered;
-    /**
-     * $products_ordered_attributes is a string containing the products attributes
-     * @var string
-     */
-    public $products_ordered_attributes;
-    /**
-     * $products_ordered_html is an HTML formatted string containing details of the products ordered for email
-     * @var string
-     */
-    public $products_ordered_html;
     /**
      * $queryReturnFlag is a flag used in a notifier to prevent default processing of order query.
      * @var boolean
@@ -1006,14 +979,12 @@ class order extends base
 
         // initialized for the email confirmation
         $this->products_ordered = '';
-        $this->products_ordered_html = '';
         $this->total_tax = 0;
 
         // lowstock email report
         $this->email_low_stock = '';
 
         for ($i = 0, $n = sizeof($this->products); $i < $n; $i++) {
-            $custom_insertable_text = '';
 
             $this->doStockDecrement = (STOCK_LIMITED == 'true');
             $this->notify('NOTIFY_ORDER_PROCESSING_STOCK_DECREMENT_INIT', ['i' => $i], $this->products[$i], $i);
@@ -1111,7 +1082,6 @@ class order extends base
 
             //------ bof: insert customer-chosen options to order--------
             $attributes_exist = '0';
-            $this->products_ordered_attributes = '';
             if (isset($this->products[$i]['attributes'])) {
                 $attributes_exist = '1';
                 for ($j = 0, $n2 = sizeof($this->products[$i]['attributes']); $j < $n2; $j++) {
@@ -1218,31 +1188,10 @@ class order extends base
                         $opd_insert_id = $db->insert_ID();
                         $this->notify('NOTIFY_ORDER_DURING_CREATE_ADDED_ATTRIBUTE_DOWNLOAD_LINE_ITEM', $sql_data_array, $opd_insert_id);
                     }
-                    $this->products_ordered_attributes .= "\n\t" . $attributes_values->fields['products_options_name'] . ' ' . zen_decode_specialchars($this->products[$i]['attributes'][$j]['value']);
                 }
             }
             //------eof: insert customer-chosen options ----
             $this->notify('NOTIFY_ORDER_PROCESSING_ATTRIBUTES_EXIST', $attributes_exist);
-
-            $this->notify('NOTIFY_ORDER_DURING_CREATE_ADD_PRODUCTS', $i, $custom_insertable_text);
-
-            /* START: ADD MY CUSTOM DETAILS
-             * 1. calculate/prepare custom information to be added to this product entry in order-confirmation, perhaps as a function call to custom code to build a serial number etc:
-             *   Possible parameters to pass to custom functions at this point:
-             *     Product ID ordered (for this line item): $this->products[$i]['id']
-             *     Quantity ordered (of this line-item): $this->products[$i]['qty']
-             *     Order number: $zf_insert_id
-             *     Attribute Option Name ID: (int)$this->products[$i]['attributes'][$j]['option_id']
-             *     Attribute Option Value ID: (int)$this->products[$i]['attributes'][$j]['value_id']
-             *     Attribute Filename: $attributes_values->fields['products_attributes_filename']
-             *
-             * 2. Add that data to the $this->products_ordered_attributes variable, using this sort of format:
-             *      $this->products_ordered_attributes .=  {INSERT CUSTOM INFORMATION HERE};
-             */
-
-            $this->products_ordered_attributes .= $custom_insertable_text;
-
-            /* END: ADD MY CUSTOM DETAILS */
 
             // update totals counters
             if (!isset($this->total_weight)) $this->total_weight = 0.0;
@@ -1253,23 +1202,6 @@ class order extends base
             $this->total_cost += $this->products[$i]['final_price'] + $this->products[$i]['onetime_charges'];
 
             $this->notify('NOTIFY_ORDER_PROCESSING_ONE_TIME_CHARGES_BEGIN', $i);
-
-            // build output for email notification
-            $this->products_ordered .= $this->products[$i]['qty'] . ' x ' . $this->products[$i]['name'] . ($this->products[$i]['model'] != '' ? ' (' . $this->products[$i]['model'] . ') ' : '') . ' = ' .
-                $currencies->display_price($this->products[$i]['final_price'], $this->products[$i]['tax'], $this->products[$i]['qty']) .
-                ($this->products[$i]['onetime_charges'] != 0 ? "\n" . TEXT_ONETIME_CHARGES_EMAIL . $currencies->display_price($this->products[$i]['onetime_charges'], $this->products[$i]['tax'], 1) : '') .
-                $this->products_ordered_attributes . "\n";
-            $this->products_ordered_html .=
-                '<tr>' . "\n" .
-                '<td class="product-details" align="right" valign="top" width="30">' . $this->products[$i]['qty'] . '&nbsp;x</td>' . "\n" .
-                '<td class="product-details" valign="top">' . nl2br($this->products[$i]['name']) . ($this->products[$i]['model'] != '' ? ' (' . nl2br($this->products[$i]['model']) . ') ' : '') .
-                (!empty($this->products_ordered_attributes) ? "\n" . '<nobr>' . '<small><em>' . nl2br($this->products_ordered_attributes) . '</em></small>' . '</nobr>' : '') .
-                '</td>' . "\n" .
-                '<td class="product-details-num" valign="top" align="right">' .
-                $currencies->display_price($this->products[$i]['final_price'], $this->products[$i]['tax'], $this->products[$i]['qty']) . '</td>' . "\n" . '</tr>' . "\n" .
-                ($this->products[$i]['onetime_charges'] != 0 ?
-                    '<tr>'. "\n" . '<td class="product-details" colspan="2">' . nl2br(TEXT_ONETIME_CHARGES_EMAIL) . '</td>' . "\n" .
-                    '<td valign="top" align="right">' . $currencies->display_price($this->products[$i]['onetime_charges'], $this->products[$i]['tax'], 1) . '</td>' . "\n" . '</tr>' . "\n": '');
         }
 
         $order_total_modules->apply_credit();//ICW ADDED FOR CREDIT CLASS SYSTEM
@@ -1292,7 +1224,42 @@ class order extends base
         $this->notify('NOTIFY_ORDER_SEND_LOW_STOCK_EMAILS');
         if ($this->send_low_stock_emails && $this->email_low_stock != '' && SEND_LOWSTOCK_EMAIL == '1') {
             $email_low_stock = SEND_EXTRA_LOW_STOCK_EMAIL_TITLE . "\n\n" . $this->email_low_stock;
-            zen_mail('', SEND_EXTRA_LOW_STOCK_EMAILS_TO, EMAIL_TEXT_SUBJECT_LOWSTOCK, $email_low_stock, STORE_OWNER, EMAIL_FROM, ['EMAIL_MESSAGE_HTML' => nl2br($email_low_stock)], 'low_stock');
+            zen_mail_from_template('', SEND_EXTRA_LOW_STOCK_EMAILS_TO, EMAIL_TEXT_SUBJECT_LOWSTOCK, $email_low_stock, STORE_OWNER, EMAIL_FROM, 'low_stock');
+        }
+
+        // Loop taken from create_add_products to set up custom_insertable_text
+        $products_ordered_attributes_extra = [];
+        $email_products = [];
+        foreach ($this->products as $i => $product) {
+            $custom_insertable_text = '';
+            $this->notify('NOTIFY_ORDER_DURING_CREATE_ADD_PRODUCTS', $i, $custom_insertable_text);
+
+            /* START: ADD MY CUSTOM DETAILS
+            * 1. calculate/prepare custom information to be added to this product entry in order-confirmation, perhaps as a function call to custom code to build a serial number etc:
+            *   Possible parameters to pass to custom functions at this point:
+            *     Product ID ordered (for this line item): $this->products[$i]['id']
+            *     Quantity ordered (of this line-item): $this->products[$i]['qty']
+            *     Order number: $zf_insert_id
+            *     Attribute Option Name ID: (int)$this->products[$i]['attributes'][$j]['option_id']
+            *     Attribute Option Value ID: (int)$this->products[$i]['attributes'][$j]['value_id']
+            *     Attribute Filename: $attributes_values->fields['products_attributes_filename']
+            *
+            * 2. Add that data to the $this->products_ordered_attributes variable, using this sort of format:
+            *      $this->products_ordered_attributes .=  {INSERT CUSTOM INFORMATION HERE};
+            */
+
+            $products_ordered_attributes_extra[$i] = $custom_insertable_text;
+
+            /* END: ADD MY CUSTOM DETAILS */
+
+            $prod_copy = $product;
+            // array_clone() [
+            //     'name' => $product['name'],
+            //     'model' => $product['model'],
+            //     'attributes' => $product['attributes'],
+            $prod_copy['display_price'] = $currencies->display_price($product['final_price'], $product['tax'], $product['qty']);
+            $prod_copy['display_onetime_charges'] = $currencies->display_price($product['onetime_charges'], $product['tax'], 1);
+            $email_products[] = $prod_copy;
         }
 
         // lets start with the email confirmation
@@ -1300,14 +1267,6 @@ class order extends base
         $html_msg = [];
 
         //intro area
-        $email_order = EMAIL_TEXT_HEADER . EMAIL_TEXT_FROM . STORE_NAME . "\n\n" .
-            $this->customer['firstname'] . ' ' . $this->customer['lastname'] . "\n\n" .
-            EMAIL_THANKS_FOR_SHOPPING . "\n" . EMAIL_DETAILS_FOLLOW . "\n" .
-            EMAIL_SEPARATOR . "\n" .
-            EMAIL_TEXT_ORDER_NUMBER . ' ' . $zf_insert_id . "\n" .
-            EMAIL_TEXT_DATE_ORDERED . ' ' . $zcDate->output(DATE_FORMAT_LONG) . "\n" .
-            EMAIL_TEXT_INVOICE_URL . ' ' . zen_href_link(FILENAME_ACCOUNT_HISTORY_INFO, 'order_id=' . $zf_insert_id, 'SSL', false) . "\n\n";
-
         $html_msg['EMAIL_TEXT_HEADER'] = EMAIL_TEXT_HEADER;
         $html_msg['EMAIL_TEXT_FROM'] = EMAIL_TEXT_FROM;
         $html_msg['INTRO_STORE_NAME'] = STORE_NAME;
@@ -1321,31 +1280,23 @@ class order extends base
         $html_msg['INTRO_URL_VALUE'] = zen_href_link(FILENAME_ACCOUNT_HISTORY_INFO, 'order_id=' . $zf_insert_id, 'SSL', false);
         $html_msg['EMAIL_CUSTOMER_PHONE'] = $this->customer['telephone'];
         $html_msg['EMAIL_TEXT_TELEPHONE'] = EMAIL_TEXT_TELEPHONE;
+        $html_msg['EMAIL_SEPARATOR'] = EMAIL_SEPARATOR;
 
         //comments area
         $html_msg['ORDER_COMMENTS'] = '';
         if ($this->info['comments']) {
-            $email_order .= zen_output_string_protected($this->info['comments']) . "\n\n";
             $html_msg['ORDER_COMMENTS'] = nl2br(zen_output_string_protected($this->info['comments']));
         }
 
-        $this->notify('NOTIFY_ORDER_EMAIL_BEFORE_PRODUCTS', [], $email_order, $html_msg);
+        $this->notify('NOTIFY_ORDER_EMAIL_BEFORE_PRODUCTS', [], $html_msg);
 
         //products area
-        $email_order .= EMAIL_TEXT_PRODUCTS . "\n" .
-            EMAIL_SEPARATOR . "\n" .
-            $this->products_ordered .
-            EMAIL_SEPARATOR . "\n";
         $html_msg['PRODUCTS_TITLE'] = EMAIL_TEXT_PRODUCTS;
-        $html_msg['PRODUCTS_DETAIL'] = '<table class="product-details" border="0" width="100%" cellspacing="0" cellpadding="2">' . $this->products_ordered_html . '</table>';
+        $html_msg['PRODUCTS_DETAIL'] = $email_products; //'<table class="product-details" border="0" width="100%" cellspacing="0" cellpadding="2">' . $this->products_ordered_html . '</table>';
+        $html_msg['PRODUCTS_ATTR_EXTRA'] = $products_ordered_attributes_extra;
 
         //order totals area
-        $html_ot = '<tr><td class="order-totals-text" align="right" width="100%">' . '&nbsp;' . '</td> ' . "\n" . '<td class="order-totals-num" align="right" nowrap="nowrap">' . '---------' . '</td> </tr>' . "\n";
-        for ($i = 0, $n = sizeof($order_totals); $i < $n; $i++) {
-            $email_order .= strip_tags($order_totals[$i]['title']) . ' ' . strip_tags($order_totals[$i]['text']) . "\n";
-            $html_ot .= '<tr><td class="order-totals-text" align="right" width="100%">' . $order_totals[$i]['title'] . '</td> ' . "\n" . '<td class="order-totals-num" align="right" nowrap="nowrap">' . ($order_totals[$i]['text']) . '</td> </tr>' . "\n";
-        }
-        $html_msg['ORDER_TOTALS'] = '<table border="0" width="100%" cellspacing="0" cellpadding="2"> ' . $html_ot . ' </table>';
+        $html_msg['ORDER_TOTALS'] = $order_totals;
 
         //addresses area: Delivery
         $html_msg['HEADING_ADDRESS_INFORMATION'] = HEADING_ADDRESS_INFORMATION;
@@ -1353,105 +1304,72 @@ class order extends base
 
         $storepickup = (strpos($this->info['shipping_module_code'], "storepickup") !== false);
         if ($this->content_type != 'virtual' && !$storepickup) {
-            $html_msg['ADDRESS_DELIVERY_DETAIL'] = zen_address_label($_SESSION['customer_id'], $_SESSION['sendto'], true, '', "<br>");
+            $html_msg['ADDRESS_DELIVERY_DETAIL'] = zen_address_label($_SESSION['customer_id'], $_SESSION['sendto'], false, '', "\n");
         } else {
             $html_msg['ADDRESS_DELIVERY_DETAIL'] = 'n/a';
         }
         $html_msg['SHIPPING_METHOD_TITLE'] = HEADING_SHIPPING_METHOD;
         $html_msg['SHIPPING_METHOD_DETAIL'] = (!empty($this->info['shipping_method'])) ? $this->info['shipping_method'] : 'n/a';
 
-        if ($this->content_type != 'virtual' && !$storepickup) {
-            $email_order .= "\n" . EMAIL_TEXT_DELIVERY_ADDRESS . "\n" .
-                EMAIL_SEPARATOR . "\n" .
-                zen_address_label($_SESSION['customer_id'], $_SESSION['sendto'], false, '', "\n") . "\n";
-        }
-        $email_order .= EMAIL_TEXT_TELEPHONE . $this->customer['telephone'] . "\n\n";
-
         //addresses area: Billing
-        $email_order .= "\n" . EMAIL_TEXT_BILLING_ADDRESS . "\n" .
-            EMAIL_SEPARATOR . "\n" .
-            zen_address_label($_SESSION['customer_id'], $_SESSION['billto'], false, '', "\n") . "\n\n";
         $html_msg['ADDRESS_BILLING_TITLE'] = EMAIL_TEXT_BILLING_ADDRESS;
-        $html_msg['ADDRESS_BILLING_DETAIL'] = zen_address_label($_SESSION['customer_id'], $_SESSION['billto'], true, '', "<br>");
+        $html_msg['ADDRESS_BILLING_DETAIL'] = zen_address_label($_SESSION['customer_id'], $_SESSION['billto'], false, '', "\n");
 
         if (!empty($_SESSION['payment']) && is_object($GLOBALS[$_SESSION['payment']])) {
             $cc_num_display = (isset($this->info['cc_number']) && $this->info['cc_number'] != '') ? /*substr($this->info['cc_number'], 0, 4) . */
-                str_repeat('X', (strlen($this->info['cc_number']) - 8)) . substr($this->info['cc_number'], -4) . "\n\n" : '';
-            $email_order .= EMAIL_TEXT_PAYMENT_METHOD . "\n" .
-                EMAIL_SEPARATOR . "\n";
+                str_repeat('X', (strlen($this->info['cc_number']) - 8)) . substr($this->info['cc_number'], -4) : '';
             $payment_class = $_SESSION['payment'];
-            $email_order .= $GLOBALS[$payment_class]->title . "\n\n";
-            $email_order .= (isset($this->info['cc_type']) && $this->info['cc_type'] != '') ? $this->info['cc_type'] . ' ' . $cc_num_display . "\n\n" : '';
-            $email_order .= (isset($GLOBALS[$payment_class]->email_footer) && $GLOBALS[$payment_class]->email_footer) ? $GLOBALS[$payment_class]->email_footer . "\n\n" : '';
-        } else {
-            $email_order .= EMAIL_TEXT_PAYMENT_METHOD . "\n" .
-                EMAIL_SEPARATOR . "\n";
-            $email_order .= PAYMENT_METHOD_GV . "\n\n";
         }
+
         $html_msg['PAYMENT_METHOD_TITLE'] = EMAIL_TEXT_PAYMENT_METHOD;
         $html_msg['PAYMENT_METHOD_DETAIL'] = (isset($GLOBALS[$_SESSION['payment']]) && is_object($GLOBALS[$_SESSION['payment']]) ? $GLOBALS[$payment_class]->title : PAYMENT_METHOD_GV);
-        $html_msg['PAYMENT_METHOD_FOOTER'] = (!empty($payment_class) && isset($GLOBALS[$payment_class]->email_footer) && is_object($GLOBALS[$_SESSION['payment']]) &&
-    $GLOBALS[$payment_class]->email_footer != '') ? nl2br($GLOBALS[$payment_class]->email_footer) : (isset($this->info['cc_type']) && $this->info['cc_type'] != '' ? $this->info['cc_type'] . ' ' . $cc_num_display : '');
+        $html_msg['PAYMENT_METHOD_FOOTER'] = (
+            !empty($payment_class) && isset($GLOBALS[$payment_class]->email_footer) &&
+            is_object($GLOBALS[$_SESSION['payment']]) && $GLOBALS[$payment_class]->email_footer != ''
+        ) ? nl2br($GLOBALS[$payment_class]->email_footer) : (isset($this->info['cc_type']) && $this->info['cc_type'] != '' ? $this->info['cc_type'] . ' ' . $cc_num_display : '');
 
         // Add in store specific order message
         $this->email_order_message = defined('EMAIL_ORDER_MESSAGE') ? constant('EMAIL_ORDER_MESSAGE') : '';
         $this->notify('NOTIFY_ORDER_SET_ORDER_MESSAGE');
-        if (!empty($this->email_order_message)) {
-            $email_order .= "\n\n" . $this->email_order_message . "\n\n";
-        }
         $html_msg['EMAIL_ORDER_MESSAGE'] = $this->email_order_message;
-
-        // include disclaimer
-        if (defined('EMAIL_DISCLAIMER') && EMAIL_DISCLAIMER != '') $email_order .= "\n-----\n" . sprintf(EMAIL_DISCLAIMER, STORE_OWNER_EMAIL_ADDRESS) . "\n\n";
-        // include copyright
-        if (defined('EMAIL_FOOTER_COPYRIGHT')) $email_order .= "\n-----\n" . EMAIL_FOOTER_COPYRIGHT . "\n\n";
-
-        $email_order = str_replace('&nbsp;', ' ', $email_order);
 
         $html_msg['EMAIL_FIRST_NAME'] = $this->customer['firstname'];
         $html_msg['EMAIL_LAST_NAME'] = $this->customer['lastname'];
-        //  $html_msg['EMAIL_TEXT_HEADER'] = EMAIL_TEXT_HEADER;
-
-        $html_msg['EXTRA_INFO'] = '';
 
         // -----
         // Send customer confirmation email unless observer overrides it.
         $send_customer_email = true;
-        $this->notify('NOTIFY_ORDER_INVOICE_CONTENT_READY_TO_SEND', ['zf_insert_id' => $zf_insert_id, 'text_email' => $email_order, 'html_email' => $html_msg], $email_order, $html_msg, $send_customer_email);
+        $this->notify('NOTIFY_ORDER_INVOICE_CONTENT_READY_TO_SEND', ['zf_insert_id' => $zf_insert_id, 'html_email' => $html_msg], $html_msg, $send_customer_email);
         if ($send_customer_email === true) {
-            zen_mail($this->customer['firstname'] . ' ' . $this->customer['lastname'], $this->customer['email_address'], EMAIL_TEXT_SUBJECT . EMAIL_ORDER_NUMBER_SUBJECT . $zf_insert_id, $email_order, STORE_NAME, EMAIL_FROM, $html_msg, 'checkout', $this->attachArray);
+            zen_mail_from_template($this->customer['firstname'] . ' ' . $this->customer['lastname'], $this->customer['email_address'], EMAIL_TEXT_SUBJECT . EMAIL_ORDER_NUMBER_SUBJECT . $zf_insert_id, $html_msg, STORE_NAME, EMAIL_FROM, 'checkout', $this->attachArray);
         }
 
         // send additional emails
         if (SEND_EXTRA_ORDER_EMAILS_TO != '') {
             $extra_info = email_collect_extra_info('', '', $this->customer['firstname'] . ' ' . $this->customer['lastname'], $this->customer['email_address'], $this->customer['telephone']);
-            $html_msg['EXTRA_INFO'] = $extra_info['HTML'];
+            $html_msg['EXTRA_INFO'] = $extra_info;
 
             // include authcode and transaction id in admin-copy of email
             $payment_auth_code = !empty($GLOBALS[$_SESSION['payment']]->auth_code) ? $GLOBALS[$_SESSION['payment']]->auth_code : '';
             $payment_transaction_id = !empty($GLOBALS[$_SESSION['payment']]->transaction_id) ? $GLOBALS[$_SESSION['payment']]->transaction_id : '';
             if ($payment_auth_code !== '' || $payment_transaction_id !== '') {
                 $pmt_details = ($payment_auth_code != '' ? 'AuthCode: ' . $payment_auth_code . '  ' : '') . ($payment_transaction_id != '' ? 'TransID: ' . $payment_transaction_id : '') . "\n\n";
-                $email_order = $pmt_details . $email_order;
-                $html_msg['EMAIL_TEXT_HEADER'] = nl2br($pmt_details) . $html_msg['EMAIL_TEXT_HEADER'];
+                $html_msg['EMAIL_TEXT_HEADER'] = $pmt_details . $html_msg['EMAIL_TEXT_HEADER'];
             }
 
-            // Add extra heading stuff via observer class
-            $this->extra_header_text = '';
+            // Add extra data via observer class
             $sendExtraOrderEmail = true;
-            $this->notify('NOTIFY_ORDER_INVOICE_CONTENT_FOR_ADDITIONAL_EMAILS', $zf_insert_id, $email_order, $html_msg, $sendExtraOrderEmail);
-            $email_order = $this->extra_header_text . $email_order;
-            $html_msg['EMAIL_TEXT_HEADER'] = nl2br($this->extra_header_text) . $html_msg['EMAIL_TEXT_HEADER'];
+            $this->notify('NOTIFY_ORDER_INVOICE_CONTENT_FOR_ADDITIONAL_EMAILS', $zf_insert_id, $html_msg, $sendExtraOrderEmail);
 
             if ($sendExtraOrderEmail) {
-                zen_mail('', SEND_EXTRA_ORDER_EMAILS_TO,
+                zen_mail_from_template('', SEND_EXTRA_ORDER_EMAILS_TO,
                     SEND_EXTRA_NEW_ORDERS_EMAILS_TO_SUBJECT . ' ' . EMAIL_TEXT_SUBJECT . EMAIL_ORDER_NUMBER_SUBJECT . $zf_insert_id,
-                    $email_order . $extra_info['TEXT'], STORE_NAME, EMAIL_FROM, $html_msg, 'checkout_extra',
+                    $html_msg, STORE_NAME, EMAIL_FROM, 'checkout_extra',
                     $this->attachArray, $this->customer['firstname'] . ' ' . $this->customer['lastname'],
                     $this->customer['email_address']);
             }
         }
-        $this->notify('NOTIFY_ORDER_AFTER_SEND_ORDER_EMAIL', $zf_insert_id, $email_order, $extra_info, $html_msg);
+        $this->notify('NOTIFY_ORDER_AFTER_SEND_ORDER_EMAIL', $zf_insert_id, $extra_info, $html_msg);
     }
 
 }
