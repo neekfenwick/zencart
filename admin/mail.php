@@ -42,8 +42,18 @@ if (($action == 'send_email_to_user') && isset($_POST['customers_email_address']
 
   $from = zen_db_prepare_input($_POST['from']);
   $subject = zen_db_prepare_input($_POST['subject']);
-  $message = zen_db_prepare_input($_POST['message']);
-  $html_msg['EMAIL_MESSAGE_HTML'] = zen_db_prepare_input(isset($_POST['message_html']) ? $_POST['message_html'] : '');
+  $message_html = zen_db_prepare_input($_POST['message_html']);
+  if (empty($_POST['message'])) {
+    $message = $_POST['message_html'];
+    $message = preg_replace('/<br\s*>/', "\n", $message);
+    $message = str_replace('</p>', "</p>\n", $message);
+    $message = stripslashes(strip_tags($message));
+  } else {
+    $message = $_POST['message'];
+  }
+
+  $html_msg['EMAIL_MESSAGE_HTML'] = $message_html;
+  $html_msg['EMAIL_MESSAGE_TEXT'] = $message_text;
   $attachment_file = $_POST['attachment_file'];
   $attachment_fname = basename($_POST['attachment_file']);
   $attachment_filetype = $_POST['attachment_filetype'];
@@ -55,7 +65,7 @@ if (($action == 'send_email_to_user') && isset($_POST['customers_email_address']
     $html_msg['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
     $html_msg['EMAIL_FIRST_NAME'] = $item['customers_firstname'];
     $html_msg['EMAIL_LAST_NAME'] = $item['customers_lastname'];
-    $rc = zen_mail($item['customers_firstname'] . ' ' . $item['customers_lastname'], $item['customers_email_address'], $subject, $message, STORE_NAME, $from, $html_msg, 'direct_email', array('file' => $attachment_file, 'name' => basename($attachment_file), 'mime_type' => $attachment_filetype));
+    $rc = zen_mail_from_template($item['customers_firstname'] . ' ' . $item['customers_lastname'], $item['customers_email_address'], $subject, $html_msg, STORE_NAME, $from, 'direct_email', array('file' => $attachment_file, 'name' => basename($attachment_file), 'mime_type' => $attachment_filetype));
     if ($rc === '') $recip_count++;
   }
   if ($recip_count > 0) {
@@ -220,11 +230,14 @@ if ($action == 'preview') {
           <div class="col-sm-3 text-right"><b><?php echo strip_tags(TEXT_MESSAGE); ?></b></div>
           <div class="col-sm-9 tt">
               <?php
-              $message_preview = empty($_POST['message']) ? $_POST['message_html'] : $_POST['message'];
-              $message_preview = (false !== stripos($message_preview, '<br') ? $message_preview : nl2br($message_preview));
-              $message_preview = str_replace(array('<br>', '<br />'), "<br />\n", $message_preview);
-              $message_preview = str_replace('</p>', "</p>\n", $message_preview);
-              echo  nl2br(htmlspecialchars(stripslashes(strip_tags($message_preview)), ENT_COMPAT, CHARSET, TRUE));
+              if (empty($_POST['message'])) {
+                $message_preview = $_POST['message_html'];
+                $message_preview = preg_replace('/<br\s*>/', "\n", $message_preview);
+                $message_preview = stripslashes(strip_tags($message_preview));
+              } else {
+                $message_preview = $_POST['message'];
+              }
+              echo nl2br(htmlspecialchars($message_preview, ENT_COMPAT, CHARSET, TRUE));
               ?>
           </div>
           <div class="col-sm-12"><hr></div>
