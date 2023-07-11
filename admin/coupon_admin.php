@@ -60,50 +60,36 @@ if ($_GET['action'] == 'send_email_to_user' && !empty($_POST['customers_email_ad
   $subject = zen_db_prepare_input($_POST['subject']);
   $recip_count = 0;
   $text_coupon_help = sprintf(TEXT_COUPON_HELP_DATE, zen_date_short($coupon_result->fields['coupon_start_date']), zen_date_short($coupon_result->fields['coupon_expire_date']));
-  $html_coupon_help = sprintf(HTML_COUPON_HELP_DATE, zen_date_short($coupon_result->fields['coupon_start_date']), zen_date_short($coupon_result->fields['coupon_expire_date']));
+
+  $block['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
+  $block['EMAIL_MESSAGE_TEXT'] = zen_db_prepare_input($_POST['message']);
+  $block['EMAIL_MESSAGE_HTML'] = zen_db_prepare_input($_POST['message_html']);
+  $block['COUPON_TEXT_TO_REDEEM'] = TEXT_TO_REDEEM;
+  $block['COUPON_TEXT_VOUCHER_IS'] = TEXT_VOUCHER_IS;
+  $block['COUPON_CODE'] = $coupon_result->fields['coupon_code'];
+  $block['COUPON_HELP'] = $text_coupon_help;
+  $block['coupon_is_valid_for_sales'] = $coupon_result->fields['coupon_is_valid_for_sales'];
+  $block['coupon_product_count'] = $coupon_result->fields['coupon_product_count'];
+  $block['TEXT_COUPON_IS_VALID_FOR_SALES_EMAIL'] = TEXT_COUPON_IS_VALID_FOR_SALES_EMAIL;
+  $block['TEXT_NO_COUPON_IS_VALID_FOR_SALES_EMAIL'] = TEXT_NO_COUPON_IS_VALID_FOR_SALES_EMAIL;
+  $block['TEXT_COUPON_PRODUCT_COUNT_PER_PRODUCT'] = TEXT_COUPON_PRODUCT_COUNT_PER_PRODUCT;
+  $block['TEXT_COUPON_PRODUCT_COUNT_PER_ORDER'] = TEXT_COUPON_PRODUCT_COUNT_PER_ORDER;
+  $block['COUPON_DESCRIPTION'] = (!empty($coupon_result->fields['coupon_description']) ? $coupon_result->fields['coupon_description'] : '');
+  $block['COUPON_TEXT_REMEMBER'] = TEXT_REMEMBER;
+  $block['COUPON_REDEEM_STORENAME_URL'] = sprintf(TEXT_VISIT, '<a href="' . HTTP_CATALOG_SERVER . DIR_WS_CATALOG . '">' . STORE_NAME . '</a>');
 
   foreach ($mail as $item) {
-    $message = zen_db_prepare_input($_POST['message']);
-    $message .= "\n\n" . TEXT_TO_REDEEM . "\n\n";
-    $message .= TEXT_VOUCHER_IS . $coupon_result->fields['coupon_code'] . "\n\n";
-    $message .= $text_coupon_help . "\n\n";
-    if ($coupon_result->fields['coupon_is_valid_for_sales']) {
-      $message .= TEXT_COUPON_IS_VALID_FOR_SALES_EMAIL . "\n\n";
-    } else {
-      $message .= TEXT_NO_COUPON_IS_VALID_FOR_SALES_EMAIL . "\n\n";
-    }
-    if ($coupon_result->fields['coupon_product_count']) {
-      $message .= TEXT_COUPON_PRODUCT_COUNT_PER_PRODUCT . "\n\n";
-    } else {
-      $message .= TEXT_COUPON_PRODUCT_COUNT_PER_ORDER . "\n\n";
-    }
-
-    $message .= TEXT_REMEMBER . "\n\n";
-    $message .= (!empty($coupon_result->fields['coupon_description']) ? $coupon_result->fields['coupon_description'] . "\n\n" : '');
-    $message .= sprintf(TEXT_VISIT, HTTP_CATALOG_SERVER . DIR_WS_CATALOG);
-
-    // disclaimer
-    $message .= "\n-----\n" . sprintf(EMAIL_DISCLAIMER, STORE_OWNER_EMAIL_ADDRESS) . "\n\n";
-
-    $html_msg['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
-    $html_msg['EMAIL_FIRST_NAME'] = $item['customers_firstname'];
-    $html_msg['EMAIL_LAST_NAME'] = $item['customers_lastname'];
-    $html_msg['EMAIL_MESSAGE_HTML'] = zen_db_prepare_input($_POST['message_html']);
-    $html_msg['COUPON_TEXT_TO_REDEEM'] = TEXT_TO_REDEEM;
-    $html_msg['COUPON_TEXT_VOUCHER_IS'] = TEXT_VOUCHER_IS;
-    $html_msg['COUPON_CODE'] = $coupon_result->fields['coupon_code'] . $html_coupon_help;
-    $html_msg['COUPON_DESCRIPTION'] = (!empty($coupon_result->fields['coupon_description']) ? $coupon_result->fields['coupon_description'] : '');
-    $html_msg['COUPON_TEXT_REMEMBER'] = TEXT_REMEMBER;
-    $html_msg['COUPON_REDEEM_STORENAME_URL'] = sprintf(TEXT_VISIT, '<a href="' . HTTP_CATALOG_SERVER . DIR_WS_CATALOG . '">' . STORE_NAME . '</a>');
+    $block['EMAIL_FIRST_NAME'] = $item['customers_firstname'];
+    $block['EMAIL_LAST_NAME'] = $item['customers_lastname'];
 
 //Send the emails
-    zen_mail($item['customers_firstname'] . ' ' . $item['customers_lastname'], $item['customers_email_address'], $subject, $message, '', $from, $html_msg, 'coupon');
+    zen_mail_from_template($item['customers_firstname'] . ' ' . $item['customers_lastname'], $item['customers_email_address'], $subject, $block, '', $from, 'coupon');
     zen_record_admin_activity('Coupon code ' . $coupon_result->fields['coupon_code'] . ' emailed to customer ' . $item['customers_email_address'], 'info');
     $zco_notifier->notify('ADMIN_COUPON_CODE_EMAILED_TO_CUSTOMER', $coupon_result->fields['coupon_code'], $item['customers_email_address']);
     $recip_count++;
     // send copy to Admin if enabled
     if (SEND_EXTRA_DISCOUNT_COUPON_ADMIN_EMAILS_TO_STATUS == '1' and SEND_EXTRA_DISCOUNT_COUPON_ADMIN_EMAILS_TO != '') {
-      zen_mail('', SEND_EXTRA_DISCOUNT_COUPON_ADMIN_EMAILS_TO, SEND_EXTRA_DISCOUNT_COUPON_ADMIN_EMAILS_TO_SUBJECT . ' ' . $subject, $message, '', $from, $html_msg, 'coupon_extra');
+      zen_mail_from_template('', SEND_EXTRA_DISCOUNT_COUPON_ADMIN_EMAILS_TO, SEND_EXTRA_DISCOUNT_COUPON_ADMIN_EMAILS_TO_SUBJECT . ' ' . $subject, $block, '', $from, 'coupon_extra');
     }
   }
   zen_redirect(zen_href_link(FILENAME_COUPON_ADMIN, 'mail_sent_to=' . urlencode($mail_sent_to) . '&recip_count=' . $recip_count));
