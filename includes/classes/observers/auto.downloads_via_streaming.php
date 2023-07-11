@@ -73,7 +73,7 @@ class zcObserverDownloadsViaStreaming extends base {
         $msg = 'Please contact store owner.  ERROR: Cannot read file: ' . $origin_filename;
         $messageStack->add_session('default', $msg, 'error');
         error_log($msg);
-        zen_mail('', STORE_OWNER_EMAIL_ADDRESS, ERROR_CUSTOMER_DOWNLOAD_FAILURE, "Unable to open file '" . $origin_filename . " for reading.  Check the file permissions.", STORE_NAME, EMAIL_FROM);
+        zen_mail_from_template('', STORE_OWNER_EMAIL_ADDRESS, ERROR_CUSTOMER_DOWNLOAD_FAILURE, "Unable to open file '" . $origin_filename . " for reading.  Check the file permissions.", STORE_NAME, EMAIL_FROM);
       }
       $this->notify('NOTIFY_DOWNLOAD_WITHOUT_REDIRECT_VIA_CHUNKS___COMPLETED');
     }
