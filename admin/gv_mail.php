@@ -88,16 +88,17 @@ if ($action != '') {
         $db->Execute("INSERT INTO " . TABLE_COUPON_EMAIL_TRACK . " (coupon_id, customer_id_sent, sent_firstname, emailed_to, date_sent)
                       VALUES (" . (int)$insert_id . ", 0, 'Admin', '" . zen_db_input($row['customers_email_address']) . "', now() )");
 
-        $message = EMAIL_SALUTATION . ' ' . $row['customers_firstname'] . ' ' . $row['customers_lastname'] . ',' . "\n\n";
-        $html_msg['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
-        $html_msg['EMAIL_FIRST_NAME'] = $row['customers_firstname'];
-        $html_msg['EMAIL_LAST_NAME'] = $row['customers_lastname'];
+        // $message = EMAIL_SALUTATION . ' ' . $row['customers_firstname'] . ' ' . $row['customers_lastname'] . ',' . "\n\n";
+        $block['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
+        $block['EMAIL_FIRST_NAME'] = $row['customers_firstname'];
+        $block['EMAIL_LAST_NAME'] = $row['customers_lastname'];
 
-        $message .= zen_db_prepare_input($_POST['message']);
+        // $message .= zen_db_prepare_input($_POST['message']);
+        $block['EMAIL_MESSAGE_TEXT'] = zen_db_prepare_input($_POST['message']);
         if (EMAIL_USE_HTML == 'true') {
-          $html_msg['EMAIL_MESSAGE_HTML'] = zen_db_prepare_input($_POST['message_html']);
+          $block['EMAIL_MESSAGE_HTML'] = zen_db_prepare_input($_POST['message_html']);
         } else {
-          $html_msg['EMAIL_MESSAGE_HTML'] = '';
+          $block['EMAIL_MESSAGE_HTML'] = '';
         }
 
         $gv_value = $currencies->format($_POST['amount']);
@@ -107,21 +108,22 @@ if ($action != '') {
           $url = HTTP_CATALOG_SERVER . DIR_WS_CATALOG . 'index.php?main_page=gv_redeem&gv_no=';
         }
 
-        $message .= "\n\n" . sprintf(TEXT_GV_ANNOUNCE, $gv_value) . "\n\n";
-        $html_msg['GV_ANNOUNCE'] = sprintf(TEXT_GV_ANNOUNCE, $gv_value);
+        // $message .= "\n\n" . sprintf(TEXT_GV_ANNOUNCE, $gv_value) . "\n\n";
+        $block['GV_ANNOUNCE'] = sprintf(TEXT_GV_ANNOUNCE, $gv_value);
 
-        $message .= sprintf(TEXT_GV_TO_REDEEM_TEXT, $url, $id1);
-        $html_msg['GV_REDEEM'] = sprintf(TEXT_GV_TO_REDEEM_HTML, $url, $id1);
+        // $message .= sprintf(TEXT_GV_TO_REDEEM_TEXT, $url, $id1);
+        $block['GV_REDEEM_TEXT'] = sprintf(TEXT_GV_TO_REDEEM_TEXT, $url, $id1);
+        $block['GV_REDEEM_HTML'] = sprintf(TEXT_GV_TO_REDEEM_HTML, $url, $id1);
 
         // disclaimer
-        $message .= "\n-----\n" . sprintf(EMAIL_DISCLAIMER, STORE_OWNER_EMAIL_ADDRESS) . "\n\n";
+        // $message .= "\n-----\n" . sprintf(EMAIL_DISCLAIMER, STORE_OWNER_EMAIL_ADDRESS) . "\n\n";
 
-        zen_mail($row['customers_firstname'] . ' ' . $row['customers_lastname'], $row['customers_email_address'], $subject, $message, $from_name, $from_email_address, $html_msg, 'gv_mail');
+        zen_mail_from_template($row['customers_firstname'] . ' ' . $row['customers_lastname'], $row['customers_email_address'], $subject, $block, $from_name, $from_email_address, 'gv_mail');
         zen_record_admin_activity('GV mail sent to ' . $row['customers_email_address'] . ' for ' . $currencies->format($_POST['amount']), 'info');
         $recip_count++;
 
         if (SEND_EXTRA_GV_ADMIN_EMAILS_TO_STATUS == '1' and SEND_EXTRA_GV_ADMIN_EMAILS_TO != '') {
-          zen_mail('', SEND_EXTRA_GV_ADMIN_EMAILS_TO, SEND_EXTRA_GV_ADMIN_EMAILS_TO_SUBJECT . ' ' . $subject, $message, $from_name, $from_email_address, $html_msg, 'gv_mail_extra');
+          zen_mail_from_template('', SEND_EXTRA_GV_ADMIN_EMAILS_TO, SEND_EXTRA_GV_ADMIN_EMAILS_TO_SUBJECT . ' ' . $subject, $block, $from_name, $from_email_address, 'gv_mail_extra');
         }
       }
 
