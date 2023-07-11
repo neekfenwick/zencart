@@ -62,17 +62,9 @@ if ($_GET['action'] == 'confirmrelease' && isset($_POST['gid'])) {
       $gv_amount = $gv_resulta->fields['amount'];
 
       // Begin composing email content
-//      //Let's build a message object using the email class
       $mail = $db->Execute("SELECT customers_firstname, customers_lastname, customers_email_address
                             FROM " . TABLE_CUSTOMERS . "
                             WHERE customers_id = " . (int)$gv_resulta->fields['customer_id']);
-
-      $message = TEXT_REDEEM_GV_MESSAGE_HEADER . "\n" . HTTP_CATALOG_SERVER . DIR_WS_CATALOG . "\n\n" . TEXT_REDEEM_GV_MESSAGE_RELEASED;
-      $message .= sprintf(TEXT_REDEEM_GV_MESSAGE_AMOUNT, $currencies->format($gv_amount)) . "\n\n";
-      $message .= TEXT_REDEEM_GV_MESSAGE_THANKS . "\n" . STORE_OWNER . "\n\n" . HTTP_CATALOG_SERVER . DIR_WS_CATALOG;
-      $message .= TEXT_REDEEM_GV_MESSAGE_BODY;
-      $message .= TEXT_REDEEM_GV_MESSAGE_FOOTER;
-      $message .= "\n-----\n" . sprintf(EMAIL_DISCLAIMER, STORE_OWNER_EMAIL_ADDRESS) . "\n\n";
 
       $html_msg['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
       $html_msg['EMAIL_FIRST_NAME'] = $mail->fields['customers_firstname'];
@@ -80,13 +72,12 @@ if ($_GET['action'] == 'confirmrelease' && isset($_POST['gid'])) {
       $html_msg['GV_NOTICE_HEADER'] = TEXT_REDEEM_GV_MESSAGE_HEADER;
       $html_msg['GV_NOTICE_RELEASED'] = TEXT_REDEEM_GV_MESSAGE_RELEASED;
       $html_msg['GV_NOTICE_AMOUNT_REDEEM'] = sprintf(TEXT_REDEEM_GV_MESSAGE_AMOUNT, '<strong>' . $currencies->format($gv_amount) . '</strong>');
-      $html_msg['GV_NOTICE_VALUE'] = $currencies->format($gv_amount);
       $html_msg['GV_NOTICE_THANKS'] = TEXT_REDEEM_GV_MESSAGE_THANKS;
       $html_msg['TEXT_REDEEM_GV_MESSAGE_BODY'] = TEXT_REDEEM_GV_MESSAGE_BODY;
       $html_msg['TEXT_REDEEM_GV_MESSAGE_FOOTER'] = TEXT_REDEEM_GV_MESSAGE_FOOTER;
 
-//send the message
-      zen_mail($mail->fields['customers_firstname'] . ' ' . $mail->fields['customers_lastname'], $mail->fields['customers_email_address'], TEXT_REDEEM_GV_SUBJECT . TEXT_REDEEM_GV_SUBJECT_ORDER . $gv_resulta->fields['order_id'], $message, STORE_NAME, EMAIL_FROM, $html_msg, 'gv_queue');
+      //send the message
+      zen_mail_from_template($mail->fields['customers_firstname'] . ' ' . $mail->fields['customers_lastname'], $mail->fields['customers_email_address'], TEXT_REDEEM_GV_SUBJECT . TEXT_REDEEM_GV_SUBJECT_ORDER . $gv_resulta->fields['order_id'], $html_msg, STORE_NAME, EMAIL_FROM, 'gv_queue');
 
       zen_record_admin_activity('GV Queue entry released in the amount of ' . $gv_amount . ' for ' . $mail->fields['customers_email_address'], 'info');
 
