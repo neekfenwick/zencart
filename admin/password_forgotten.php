@@ -84,13 +84,13 @@ if (isset($_POST['action']) && $_POST['action'] == 'update') {
             WHERE admin_id = " . (int)$result->fields['admin_id'];
     $sql = $db->bindVars($sql, ':token:', $resetToken, 'string');
     $db->Execute($sql);
-    $html_msg['EMAIL_CUSTOMERS_NAME'] = $result->fields['admin_name'];
-    $html_msg['EMAIL_MESSAGE_HTML'] = sprintf(TEXT_EMAIL_MESSAGE_PWD_RESET, $_SERVER['REMOTE_ADDR'], $new_password);
-    zen_mail($result->fields['admin_name'], $result->fields['admin_email'], TEXT_EMAIL_SUBJECT_PWD_RESET, sprintf(TEXT_EMAIL_MESSAGE_PWD_RESET, $_SERVER['REMOTE_ADDR'], $new_password), STORE_NAME, EMAIL_FROM, $html_msg, 'password_forgotten_admin');
+    $block['EMAIL_CUSTOMERS_NAME'] = $result->fields['admin_name'];
+    $block['EMAIL_MESSAGE'] = sprintf(TEXT_EMAIL_MESSAGE_PWD_RESET, $_SERVER['REMOTE_ADDR'], $new_password);
+    zen_mail_from_template($result->fields['admin_name'], $result->fields['admin_email'], TEXT_EMAIL_SUBJECT_PWD_RESET, $block, STORE_NAME, EMAIL_FROM, 'password_forgotten_admin');
     $email_message = MESSAGE_PASSWORD_SENT;
   } else {
-    $html_msg['EMAIL_MESSAGE_HTML'] = sprintf(TEXT_EMAIL_MESSAGE_PWD_FAILED_RESET, $_SERVER['REMOTE_ADDR']);
-    zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, TEXT_EMAIL_SUBJECT_PWD_FAILED_RESET, sprintf(TEXT_EMAIL_MESSAGE_PWD_FAILED_RESET, $_SERVER['REMOTE_ADDR']), STORE_NAME, EMAIL_FROM, $html_msg, 'password_forgotten_admin');
+    $block['EMAIL_MESSAGE'] = sprintf(TEXT_EMAIL_MESSAGE_PWD_FAILED_RESET, $_SERVER['REMOTE_ADDR']);
+    zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, TEXT_EMAIL_SUBJECT_PWD_FAILED_RESET, $block, STORE_NAME, EMAIL_FROM, 'password_forgotten_admin');
     $email_message = MESSAGE_PASSWORD_SENT;
   }
 }

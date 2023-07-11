@@ -60,13 +60,11 @@ if (isset($_GET['action']) && ($_GET['action'] == 'process')) {
     $sql = $db->bindVars($sql, ':customersID', $check_customer->fields['customers_id'], 'integer');
     $db->Execute($sql);
 
-    $html_msg['EMAIL_CUSTOMERS_NAME'] = $check_customer->fields['customers_firstname'] . ' ' . $check_customer->fields['customers_lastname'];
-    $html_msg['EMAIL_MESSAGE_HTML'] = sprintf(EMAIL_PASSWORD_REMINDER_BODY, $new_password);
+    $block['EMAIL_CUSTOMERS_NAME'] = $check_customer->fields['customers_firstname'] . ' ' . $check_customer->fields['customers_lastname'];
+    $block['EMAIL_MESSAGE'] = sprintf(EMAIL_PASSWORD_REMINDER_BODY, $new_password);
 
     // send the email
-    // Note: If this mail frequently winds up in spam folders, try replacing 
-    // $html_msg to 'none' in the call below. 
-    zen_mail($check_customer->fields['customers_firstname'] . ' ' . $check_customer->fields['customers_lastname'], $email_address, EMAIL_PASSWORD_REMINDER_SUBJECT, sprintf(EMAIL_PASSWORD_REMINDER_BODY, $new_password), STORE_NAME, EMAIL_FROM, $html_msg,'password_forgotten');
+    zen_mail_from_template($check_customer->fields['customers_firstname'] . ' ' . $check_customer->fields['customers_lastname'], $email_address, EMAIL_PASSWORD_REMINDER_SUBJECT, $block, STORE_NAME, EMAIL_FROM, 'password_forgotten');
 
     // handle 3rd-party integrations
     $zco_notifier->notify('NOTIFY_PASSWORD_FORGOTTEN_CHANGED', $email_address, $check_customer->fields['customers_id'], $new_password);
