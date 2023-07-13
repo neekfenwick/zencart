@@ -10,9 +10,11 @@
      * @version $Id: lat9 2022 Nov 23 Modified in v1.5.8a $
      */
 
+    require_once(DIR_FS_CATALOG . DIR_WS_CLASSES . 'PhiloBlade.php');
     use PHPMailer\PHPMailer\PHPMailer;
     use PHPMailer\PHPMailer\Exception;
     use PHPMailer\PHPMailer\SMTP;
+    use Philo\Blade\Blade;
 
     /**
      * Set email system debugging off or on
@@ -56,7 +58,7 @@
  */
 function zen_mail_from_template(string $to_name, string $to_address,
   string $email_subject, mixed $block, string $from_email_name, string $from_email_address,
-  string $module='default', mixed $attachments_list=null,
+  string $module='default', /* cannot init correctly: mixed */ $attachments_list='',
   string $email_reply_to_name = '', string $email_reply_to_address = '' ) {
 
   global $db, $messageStack, $zco_notifier;
@@ -80,6 +82,8 @@ function zen_mail_from_template(string $to_name, string $to_address,
   // check for injection attempts. If new-line characters found in header fields, simply fail to send the message
   foreach(array($from_email_address, $to_address, $from_email_name, $to_name, $email_subject) as $key=>$value) {
     if (strpos($value, "\r") !== false || strpos($value, "\n") !== false) {
+        return false;
+    }
   }
 
   // if an empty html-msg supplied, exit
