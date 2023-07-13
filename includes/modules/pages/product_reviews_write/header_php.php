@@ -95,23 +95,19 @@ if (isset($_GET['action']) && ($_GET['action'] == 'process')) {
       $sql = $db->bindVars($sql, ':reviewText', $review_text, 'string');
       $db->Execute($sql);
 
-      $email_text = '';
       $send_admin_email = REVIEWS_APPROVAL == '1' && SEND_EXTRA_REVIEW_NOTIFICATION_EMAILS_TO_STATUS == '1' && defined('SEND_EXTRA_REVIEW_NOTIFICATION_EMAILS_TO') && SEND_EXTRA_REVIEW_NOTIFICATION_EMAILS_TO !='';
 
       $zco_notifier->notify('NOTIFY_SEND_ADMIN_EMAIL_WRITE_REVIEW');
       // send review-notification email to admin
       if ($send_admin_email) {
-        $email_text .= sprintf(EMAIL_PRODUCT_REVIEW_CONTENT_INTRO, $product_info->fields['products_name']) . "\n\n" ;
-        $email_text .= sprintf(EMAIL_PRODUCT_REVIEW_CONTENT_DETAILS, $review_text)."\n\n";
         $email_subject = sprintf(EMAIL_REVIEW_PENDING_SUBJECT,$product_info->fields['products_name']);
-        $html_msg['EMAIL_SUBJECT'] = sprintf(EMAIL_REVIEW_PENDING_SUBJECT,$product_info->fields['products_name']);
-        $html_msg['EMAIL_MESSAGE_HTML'] = str_replace('\n','',sprintf(EMAIL_PRODUCT_REVIEW_CONTENT_INTRO, $product_info->fields['products_name']));
-        $html_msg['EMAIL_MESSAGE_HTML'] .= '<br>';
-        $html_msg['EMAIL_MESSAGE_HTML'] .= str_replace('\n','',sprintf(EMAIL_PRODUCT_REVIEW_CONTENT_DETAILS, $review_text));
+        $block['EMAIL_SUBJECT'] = sprintf(EMAIL_REVIEW_PENDING_SUBJECT,$product_info->fields['products_name']);
+        $block['EMAIL_MESSAGE'] = sprintf(EMAIL_PRODUCT_REVIEW_CONTENT_INTRO, $product_info->fields['products_name']) .
+          "\n\n" . sprintf(EMAIL_PRODUCT_REVIEW_CONTENT_DETAILS, $review_text);
         $extra_info=email_collect_extra_info('', '', $customer->fields['customers_firstname'] . ' ' . $customer->fields['customers_lastname'] , $customer->fields['customers_email_address'] );
-        $html_msg['EXTRA_INFO'] = $extra_info['HTML'];
+        $block['EXTRA_INFO'] = $extra_info;
         $zco_notifier->notify('NOTIFY_EMAIL_READY_WRITE_REVIEW');
-        zen_mail('', SEND_EXTRA_REVIEW_NOTIFICATION_EMAILS_TO, $email_subject, $email_text . $extra_info['TEXT'], STORE_NAME, EMAIL_FROM, $html_msg, 'reviews_extra');
+        zen_mail_from_template('', SEND_EXTRA_REVIEW_NOTIFICATION_EMAILS_TO, $email_subject, $block, STORE_NAME, EMAIL_FROM, 'reviews_extra');
       }
       // end send email
 
