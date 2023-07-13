@@ -535,7 +535,7 @@ class firstdata_hco extends base {
     }
     // send email alerts only if in alert mode or if email specifically requested as logging mode
     if ((isset($response['x_response_code']) && $response['x_response_code'] != '1' && stristr(MODULE_PAYMENT_FIRSTDATA_PAYMENTPAGES_DEBUGGING, 'Alerts')) || stristr(MODULE_PAYMENT_FIRSTDATA_PAYMENTPAGES_DEBUGGING, 'Email')) {
-      zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, 'First Data HostedPayments Alert ' . $response['x_invoice_num'] . ' ' . date('M-d-Y h:i:s') . ' ' . $response['x_trans_id'], $errorMessage, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($errorMessage)), 'debug');
+      zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, 'First Data HostedPayments Alert ' . $response['x_invoice_num'] . ' ' . date('M-d-Y h:i:s') . ' ' . $response['x_trans_id'], [ 'EMAIL_MESSAGE' => $errorMessage ], STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'debug');
     }
   }
 }

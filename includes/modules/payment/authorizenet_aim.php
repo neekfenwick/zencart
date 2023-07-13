@@ -739,7 +739,7 @@ class authorizenet_aim extends base {
         }
       }
       if (($response[0] != '1' && stristr(MODULE_PAYMENT_AUTHORIZENET_AIM_DEBUGGING, 'Alerts')) || strstr(MODULE_PAYMENT_AUTHORIZENET_AIM_DEBUGGING, 'Email')) {
-        zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, 'AuthorizenetAIM Alert ' . $response[7] . ' ' . date('M-d-Y h:i:s') . ' ' . $response[6], $errorMessage, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($errorMessage)), 'debug');
+        zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, 'AuthorizenetAIM Alert ' . $response[7] . ' ' . date('M-d-Y h:i:s') . ' ' . $response[6], [ 'EMAIL_MESSAGE' => $errorMessage ], STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'debug');
       }
 
     // DATABASE SECTION
