@@ -530,7 +530,7 @@ if (false) { // disabled until clarification is received about coupons in PayPal
     // FMF
     if ($this->fmfResponse != '') {
       $detailedMessage = $insert_id . "\n" . $this->fmfResponse . "\n" . MODULES_PAYMENT_PAYPALDP_TEXT_EMAIL_FMF_INTRO . "\n" . print_r($this->fmfErrors, TRUE);
-      zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULES_PAYMENT_PAYPALDP_TEXT_EMAIL_FMF_SUBJECT . ' (' . $insert_id . ')', $detailedMessage, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($detailedMessage)), 'paymentalert');
+      zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULES_PAYMENT_PAYPALDP_TEXT_EMAIL_FMF_SUBJECT . ' (' . $insert_id . ')', $detailedMessage, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
     }
 
     // add a new OSH record for this order's PP details
@@ -839,7 +839,7 @@ if (false) { // disabled until clarification is received about coupons in PayPal
     if (MODULE_PAYMENT_PAYPALWPP_DEBUGGING == 'Log and Email') {
       $data =  urldecode($data) . "\n\n";
       if ($useSession) $data .= "\nSession data: " . print_r($_SESSION, true);
-      zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, $subject, $this->code . "\n" . $data, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($this->code . "\n" . $data)), 'debug');
+      zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, $subject, $this->code . "\n" . $data, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'debug');
     }
   }
   /**
@@ -2328,21 +2328,19 @@ if (false) { // disabled until clarification is received about coupons in PayPal
           // require the language file
           zen_include_language_file('create_account.php', '/', 'inline');
           // set the mail text
-          $email_text = sprintf(EMAIL_GREET_NONE, $paypal_ec_payer_info['payer_firstname']) . EMAIL_WELCOME . "\n\n" . EMAIL_TEXT;
-          $email_text .= "\n\n" . EMAIL_EC_ACCOUNT_INFORMATION . "\nUsername: " . $paypal_ec_payer_info['payer_email'] . "\nPassword: " . $password . "\n\n";
-          $email_text .= EMAIL_CONTACT;
+          $block = array();
+          $block['EMAIL_GREETING']      = sprintf(EMAIL_GREET_NONE, $paypal_ec_payer_info['payer_firstname']) ;
+          $block['EMAIL_WELCOME']       = EMAIL_WELCOME;
+          $block['EMAIL_MESSAGE']       = EMAIL_TEXT . "\n\n" . EMAIL_EC_ACCOUNT_INFORMATION . "\nUsername: " . $paypal_ec_payer_info['payer_email'] . "\nPassword: " . $password;
+          $block['EMAIL_CONTACT_OWNER'] = EMAIL_CONTACT;
+          $block['EMAIL_CLOSURE']       = nl2br(EMAIL_CLOSURE);
           // include create-account-specific disclaimer
-          $email_text .= "\n\n" . sprintf(EMAIL_DISCLAIMER_NEW_CUSTOMER, STORE_OWNER_EMAIL_ADDRESS). "\n\n";
-          $email_html = array();
-          $email_html['EMAIL_GREETING']      = sprintf(EMAIL_GREET_NONE, $paypal_ec_payer_info['payer_firstname']) ;
-          $email_html['EMAIL_WELCOME']       = EMAIL_WELCOME;
-          $email_html['EMAIL_MESSAGE_HTML']  = nl2br(EMAIL_TEXT . "\n\n" . EMAIL_EC_ACCOUNT_INFORMATION . "\nUsername: " . $paypal_ec_payer_info['payer_email'] . "\nPassword: " . $password . "\n\n");
-          $email_html['EMAIL_CONTACT_OWNER'] = EMAIL_CONTACT;
-          $email_html['EMAIL_CLOSURE']       = nl2br(EMAIL_GV_CLOSURE);
-          $email_html['EMAIL_DISCLAIMER']    = sprintf(EMAIL_DISCLAIMER_NEW_CUSTOMER, '<a href="mailto:' . STORE_OWNER_EMAIL_ADDRESS . '">'. STORE_OWNER_EMAIL_ADDRESS .' </a>');
+          $block['EMAIL_DISCLAIMER']    = sprintf(EMAIL_DISCLAIMER_NEW_CUSTOMER, '<a href="mailto:' . STORE_OWNER_EMAIL_ADDRESS . '">'. STORE_OWNER_EMAIL_ADDRESS .' </a>');
 
           // send the mail
-          if (trim(EMAIL_SUBJECT) != 'n/a') zen_mail($paypal_ec_payer_info['payer_firstname'] . " " . $paypal_ec_payer_info['payer_lastname'], $paypal_ec_payer_info['payer_email'], EMAIL_SUBJECT, $email_text, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, $email_html, 'welcome');
+          if (trim(EMAIL_SUBJECT) != 'n/a') {
+            zen_mail_from_template($paypal_ec_payer_info['payer_firstname'] . " " . $paypal_ec_payer_info['payer_lastname'], $paypal_ec_payer_info['payer_email'], EMAIL_SUBJECT, $block, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'welcome');
+          }
 
           // set the express checkout temp -- false means the account is no longer "only" for EC ... it'll be permanent
           $_SESSION['paypal_ec_temp'] = false;

@@ -23,7 +23,7 @@
     </div>
 @endif
 <!-- end gv/coupon section -->
-    <div class="content-line">{!! $EMAIL_MESSAGE !!}</div>
+    <div class="content-line">{!! nl2br($EMAIL_MESSAGE) !!}</div>
     <div class="content-line">{!! $EMAIL_CONTACT_OWNER !!}
       <br>
       {!! nl2br($EMAIL_CLOSURE) !!}</div>

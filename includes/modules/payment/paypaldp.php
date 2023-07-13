@@ -625,7 +625,7 @@ class paypaldp extends base {
             $reason = $errorNo . ' - ' . $errorDesc;
             $messageStack->add_session('checkout_payment', $error . '<!-- ['.$this->code.'] -->' . '<!-- result: ' . $reason . ' -->', 'error');
             $errorText = $error . "\n\n" . $reason . "\n(" . $this->code . ")\n\nProblem occurred while customer " . $_SESSION['customer_id'] . ' ' . $_SESSION['customer_first_name'] . ' ' . $_SESSION['customer_last_name'] . ' was attempting checkout with 3D-Secure authentication.';
-            zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULE_PAYMENT_PAYPALDP_TEXT_EMAIL_ERROR_SUBJECT . ' ' . $reason, $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($errorText)), 'paymentalert');
+            zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULE_PAYMENT_PAYPALDP_TEXT_EMAIL_ERROR_SUBJECT . ' ' . $reason, $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
             zen_redirect(zen_href_link(FILENAME_CHECKOUT_PAYMENT, '', 'SSL', true, false));
 
           } else {
@@ -842,7 +842,7 @@ class paypaldp extends base {
             $messageStack->add_session('checkout_payment', $error . '<!-- ['.$this->code.'] -->' . '<!-- result: ' . $reason . ' -->', 'error');
             $errorText = $reason ."\n\nProblem occurred while customer " . $_SESSION['customer_id'] . ' ' . $_SESSION['customer_first_name'] . ' ' . $_SESSION['customer_last_name'] . ' was attempting checkout with 3D-Secure authentication.';
             $errorText .= $this->code;
-            zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULE_PAYMENT_PAYPALDP_TEXT_EMAIL_ERROR_SUBJECT, $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($errorText)), 'paymentalert');
+            zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULE_PAYMENT_PAYPALDP_TEXT_EMAIL_ERROR_SUBJECT, $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
             zen_redirect(zen_href_link(FILENAME_CHECKOUT_PAYMENT, '', 'SSL', true, false));
           }
           // if enrolled, validate an acceptable authentication result
@@ -853,7 +853,7 @@ class paypaldp extends base {
               $messageStack->add_session('checkout_payment', $error . '<!-- ['.$this->code.'] -->' . '<!-- result: ' . $reason . ' -->', 'error');
               $errorText = $reason ."\n\nProblem occurred while customer " . $_SESSION['customer_id'] . ' ' . $_SESSION['customer_first_name'] . ' ' . $_SESSION['customer_last_name'] . ' was attempting checkout with 3D-Secure authentication.';
               $errorText .= $this->code;
-              zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULE_PAYMENT_PAYPALDP_TEXT_EMAIL_ERROR_SUBJECT, $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($errorText)), 'paymentalert');
+              zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULE_PAYMENT_PAYPALDP_TEXT_EMAIL_ERROR_SUBJECT, $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
 
               // remove the lookup/auth attempted status
               unset($_SESSION['3Dsecure_enroll_lookup_attempted']);
@@ -1010,7 +1010,7 @@ class paypaldp extends base {
     // FMF
     if ($this->fmfResponse != '') {
       $detailedMessage = $insert_id . "\n" . $this->fmfResponse . "\n" . MODULES_PAYMENT_PAYPALDP_TEXT_EMAIL_FMF_INTRO . "\n" . print_r($this->fmfErrors, TRUE);
-      zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULES_PAYMENT_PAYPALDP_TEXT_EMAIL_FMF_SUBJECT . ' (' . $insert_id . ')', $detailedMessage, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($detailedMessage)), 'paymentalert');
+      zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULES_PAYMENT_PAYPALDP_TEXT_EMAIL_FMF_SUBJECT . ' (' . $insert_id . ')', $detailedMessage, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
     }
 
     // add a new OSH record for this order's PP details
@@ -1284,7 +1284,7 @@ class paypaldp extends base {
     if (MODULE_PAYMENT_PAYPALDP_DEBUGGING == 'Log and Email') {
       $data =  urldecode($data) . "\n\n";
       if ($useSession) $data .= "\nSession data: " . print_r($_SESSION, true);
-      zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, $subject, $this->code . "\n" . $data, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($this->code . "\n" . $data)), 'debug');
+      zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, $subject, $this->code . "\n" . $data, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'debug');
     }
   }
   /**
@@ -2019,7 +2019,7 @@ class paypaldp extends base {
           $detailedEmailMessage = MODULE_PAYMENT_PAYPALDP_TEXT_EMAIL_ERROR_MESSAGE . urldecode($response['L_ERRORCODE0']  . ' ' . $response['RESPMSG']. "\n" . $response['L_SHORTMESSAGE0'] . "\n" . $response['L_LONGMESSAGE0'] . $response['L_ERRORCODE1'] . "\n" . $response['L_SHORTMESSAGE1'] . "\n" . $response['L_LONGMESSAGE1'] . $response['L_ERRORCODE2'] . "\n" . $response['L_SHORTMESSAGE2'] . "\n" . $response['L_LONGMESSAGE2'] . ($response['CURL_ERRORS'] != '' ? "\n" . $response['CURL_ERRORS'] : '') . "\n\n" . 'Zen Cart message: ' . $detailedMessage . "\n\n" . $errorInfo . "\n\n" . 'Transaction Response Details: ' . print_r($response, true) . "\n\n" . 'Transaction Submission: ' . urldecode($doPayPal->_sanitizeLog($doPayPal->_parseNameValueList($doPayPal->lastParamList), true)));
           $detailedEmailMessage .= $explain;
           if (!isset($response['L_ERRORCODE0']) && isset($response['RESULT'])) $detailedEmailMessage .= "\n\n" . print_r($response, TRUE);
-          zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULE_PAYMENT_PAYPALDP_TEXT_EMAIL_ERROR_SUBJECT . ' (' . zen_uncomment($errorNum) . ')', zen_uncomment($detailedEmailMessage), STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br(zen_uncomment($detailedEmailMessage))), 'paymentalert');
+          zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULE_PAYMENT_PAYPALDP_TEXT_EMAIL_ERROR_SUBJECT . ' (' . zen_uncomment($errorNum) . ')', zen_uncomment($detailedEmailMessage), STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
           if ($response['L_ERRORCODE0'] == 15012) $detailedEmailMessage = '';
           $this->terminateEC(($detailedEmailMessage == '' ? $errorText . ' (' . $errorNum . ') ' : $detailedMessage), ($gateway_mode ? true : false), FILENAME_CHECKOUT_PAYMENT);
           return true;
@@ -2123,7 +2123,7 @@ class paypaldp extends base {
           $explain = "\n\nProblem occurred while customer #" . $_SESSION['customer_id'] . ' -- ' . $_SESSION['customer_first_name'] . ' ' . $_SESSION['customer_last_name'] . ' -- was attempting checkout.' . "\n";
           $detailedEmailMessage = ($detailedMessage == '') ? '' : MODULE_PAYMENT_PAYPALDP_TEXT_EMAIL_ERROR_MESSAGE . ' ' . $response['RESPMSG'] . urldecode($response['L_ERRORCODE0'] . "\n" . $response['L_SHORTMESSAGE0'] . "\n" . $response['L_LONGMESSAGE0'] . $response['L_ERRORCODE1'] . "\n" . $response['L_SHORTMESSAGE1'] . "\n" . $response['L_LONGMESSAGE1'] . $response['L_ERRORCODE2'] . "\n" . $response['L_SHORTMESSAGE2'] . "\n" . $response['L_LONGMESSAGE2'] . ($response['CURL_ERRORS'] != '' ? "\n" . $response['CURL_ERRORS'] : '') . "\n\n" . 'Zen Cart message: ' . $detailedMessage . "\n\n" . $errorInfo . "\n\n" . 'Transaction Response Details: ' . print_r($response, true) . "\n\n" . 'Transaction Submission: ' . urldecode($doPayPal->_sanitizeLog($doPayPal->_parseNameValueList($doPayPal->lastParamList), true)));
           if ($detailedEmailMessage != '') $detailedEmailMessage .= $explain;
-          if ($detailedEmailMessage != '') zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULE_PAYMENT_PAYPALDP_TEXT_EMAIL_ERROR_SUBJECT . ' (' . zen_uncomment($errorNum) . ')', zen_uncomment($detailedMessage . $explain), STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br(zen_uncomment($detailedEmailMessage))), 'paymentalert');
+          if ($detailedEmailMessage != '') zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, MODULE_PAYMENT_PAYPALDP_TEXT_EMAIL_ERROR_SUBJECT . ' (' . zen_uncomment($errorNum) . ')', zen_uncomment($detailedMessage . $explain), STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
           $messageStack->add_session($errorText . $errorNum . $detailedMessage, 'error');
           return true;
         }
@@ -2314,7 +2314,7 @@ class paypaldp extends base {
       $errorText = 'Cardinal Lookup 3' . '[' . zen_session_id() . '] Cardinal Centinel - cmpi_lookup error - ' . $errorNo . ' - ' . $errorDesc;
       $errorText .= "\n\n" . 'There are 3 steps to configuring your Cardinal 3D-Secure service properly: ' . "\n1-Login to the Cardinal Merchant Admin URL supplied in your welcome package (NOT the test URL), and accept the license agreement.\n2-Set a transaction password.\n3-Copy your Cardinal Merchant ID and Cardinal Transaction Password into your ZC PayPal module.\n\nFor specific help, please contact implement@cardinalcommerce.com to sort out your account configuration issues.";
       $errorText .= "\n\nProblem observed while customer " . $_SESSION['customer_id'] . ' ' . $_SESSION['customer_first_name'] . ' ' . $_SESSION['customer_last_name'] . ' was attempting checkout with 3D-Secure authentication. THEIR PURCHASE WAS NOT SUCCESSFUL. Please resolve this matter to enable future checkouts.';
-      zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, substr($errorDesc, 0, 75) . ' (' . $errorNo . ')', $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($errorText)), 'paymentalert');
+      zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, substr($errorDesc, 0, 75) . ' (' . $errorNo . ')', $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
     }
 
     // default the continue flag to 'N'
@@ -2336,7 +2336,7 @@ class paypaldp extends base {
     } else if ($errorNo == 1001) { // merchant has an account configuration problem to fix
       $errorText = CENTINEL_ERROR_CODE_1001 . ' - ' . CENTINEL_ERROR_CODE_1001_DESC;
       $errorText .= "\n\nProblem occurred while customer " . $_SESSION['customer_id'] . ' ' . $_SESSION['customer_first_name'] . ' ' . $_SESSION['customer_last_name'] . ' was attempting checkout with 3D-Secure authentication.';
-      zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, CENTINEL_ERROR_CODE_1001_DESC . ' (' . CENTINEL_ERROR_CODE_1001 . ')', $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($errorText)), 'paymentalert');
+      zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, CENTINEL_ERROR_CODE_1001_DESC . ' (' . CENTINEL_ERROR_CODE_1001 . ')', $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
       $continue_flag = 'Y';
     }
 
@@ -2496,7 +2496,7 @@ class paypaldp extends base {
         $errorText = CENTINEL_ERROR_CODE_8030 . ' - ' . CENTINEL_ERROR_CODE_8030_DESC;
         $errorText .= "\n\nProblem occurred while customer " . $_SESSION['customer_id'] . ' ' . $_SESSION['customer_first_name'] . ' ' . $_SESSION['customer_last_name'] . ' was attempting checkout with 3D-Secure authentication.';
         if ($error != '-') $errorText .= "\n\nCURL error: " . $error;
-        zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, CENTINEL_ERROR_CODE_8030_DESC . ' (' . CENTINEL_ERROR_CODE_8030 . ')', $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($errorText)), 'paymentalert');
+        zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, CENTINEL_ERROR_CODE_8030_DESC . ' (' . CENTINEL_ERROR_CODE_8030 . ')', $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
       } else if (strpos($result, "<CardinalMPI>") === false) {
         // Assert that we received an expected Centinel Message in response.
         $this->zcLog('Cardinal Send 4', '[' . zen_session_id() . '] Cardinal Centinel - ' . CENTINEL_ERROR_CODE_8010_DESC);
@@ -2505,7 +2505,7 @@ class paypaldp extends base {
         $result = $this->setErrorResponse(CENTINEL_ERROR_CODE_8010, CENTINEL_ERROR_CODE_8010_DESC);
         $errorText = CENTINEL_ERROR_CODE_8010 . ' - ' . CENTINEL_ERROR_CODE_8010_DESC;
         $errorText .= "\n\nProblem occurred while customer " . $_SESSION['customer_id'] . ' ' . $_SESSION['customer_first_name'] . ' ' . $_SESSION['customer_last_name'] . ' was attempting checkout with 3D-Secure authentication.';
-        zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, CENTINEL_ERROR_CODE_8010_DESC . ' (' . CENTINEL_ERROR_CODE_8010 . ')', $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($errorText)), 'paymentalert');
+        zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, CENTINEL_ERROR_CODE_8010_DESC . ' (' . CENTINEL_ERROR_CODE_8010 . ')', $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
       } else {
         // Check whether the merchant has a properly configured 3D-Secure account
         if (strpos($result, "<ErrorNo>4243") > 0) {
@@ -2515,7 +2515,7 @@ class paypaldp extends base {
           $result = $this->setErrorResponse(CENTINEL_ERROR_CODE_4243, CENTINEL_ERROR_CODE_4243_DESC);
           $errorText = CENTINEL_ERROR_CODE_4243 . ' - ' . CENTINEL_ERROR_CODE_4243_DESC;
           $errorText .= "\n\nProblem occurred while customer " . $_SESSION['customer_id'] . ' ' . $_SESSION['customer_first_name'] . ' ' . $_SESSION['customer_last_name'] . ' was attempting checkout with 3D-Secure authentication.';
-          zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, CENTINEL_ERROR_CODE_4243_DESC . ' (' . CENTINEL_ERROR_CODE_4243 . ')', $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($errorText)), 'paymentalert');
+          zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, CENTINEL_ERROR_CODE_4243_DESC . ' (' . CENTINEL_ERROR_CODE_4243 . ')', $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
         }
       }
     } else {
@@ -2523,7 +2523,7 @@ class paypaldp extends base {
       $result = $this->setErrorResponse(CENTINEL_ERROR_CODE_8000, CENTINEL_ERROR_CODE_8000_DESC);
       $errorText = CENTINEL_ERROR_CODE_8000 . ' - ' . CENTINEL_ERROR_CODE_8000_DESC;
       $errorText .= "\n\nProblem occurred while customer " . $_SESSION['customer_id'] . ' ' . $_SESSION['customer_first_name'] . ' ' . $_SESSION['customer_last_name'] . ' was attempting checkout with 3D-Secure authentication.';
-      zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, CENTINEL_ERROR_CODE_8000_DESC . ' (' . CENTINEL_ERROR_CODE_8000 . ')', $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($errorText)), 'paymentalert');
+      zen_mail_from_template(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, CENTINEL_ERROR_CODE_8000_DESC . ' (' . CENTINEL_ERROR_CODE_8000 . ')', $errorText, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'paymentalert');
     }
 
     return $result;
