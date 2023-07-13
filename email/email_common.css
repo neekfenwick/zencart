@@ -4,7 +4,8 @@ a:hover {background-color:#eeeecc; color:#0066cc;}
 a:visited {color:#0066cc;}
 .holder {background-color:#f9f9f9; border:1px solid #9a9a9a; font-size:9px; text-align:left;}
 .header {font-size:10px; padding:0;}
-.content {font-size:10px; padding:5px;}
+.content {padding:5px;}
+.content, .content TABLE {font-size:10px;}
 .content-line {padding:5px;}
 #checkout .content-line { font-size: 10px; }
 .footer {border-top:1px solid #9a9a9a; font-size:9px; margin-top:10px; text-align:center;}
@@ -17,6 +18,8 @@ a:visited {color:#0066cc;}
 .extra-info {background-color:#cccc99; border:1px solid #9a9a9a; font-size:10px; margin-top:10px; padding:5px;}
 .extra-info-bold {font-weight:bold;}
 
+TABLE.context {border-spacing: 0;}
+TABLE.context .label {font-weight:bold;}
 .unsubscribe {border-bottom:1px solid #9a9a9a; padding:5px;}
 .gv {background-color:#66FF99; border:1px #9a9a9a; padding:2px; font-size:10px; }
 .gv-amount {font-weight:bold; color:#669966;}

@@ -61,7 +61,7 @@ if (isset($_GET['action']) && ($_GET['action'] === 'send')) {
             $send_to_array = [];
 
             // use contact us dropdown if defined and if a destination is provided
-            if (CONTACT_US_LIST !== '' && isset($_POST['send_to'])){
+            if (CONTACT_US_LIST !== '' && isset($_POST['send_to'])) {
                 $send_to_array = explode(',', CONTACT_US_LIST);
 
                 if (isset($send_to_array[$_POST['send_to']])) {
@@ -74,20 +74,27 @@ if (isset($_GET['action']) && ($_GET['action'] === 'send')) {
 
             // Assign email destination from array
             if (!empty($send_email_array)) {
-                $send_to_email = preg_replace ("/>/", "", $send_email_array[0]);
+                $send_to_email = preg_replace("/>/", "", $send_email_array[0]);
                 $send_to_email = trim(preg_replace("/</", "", $send_to_email));
                 $send_to_name  = trim(preg_replace('/\<[^*]*/', '', $send_to_array[$_POST['send_to']]));
             }
 
             // Prepare email template data
-            $html_msg['EXTRA_INFO'] = $extra_info;
+            $block['EMAIL_MESSAGE'] = $enquiry;
+            $block['CONTEXT'] = [
+                [ 'label' => OFFICE_FROM, 'value' => trim($name) ],
+                [ 'label' => OFFICE_EMAIL, 'value' => trim($email_address) ]
+            ];
+            if (!empty($telephone)) {
+                $block['CONTEXT'][] = [
+                    'label' => OFFICE_LOGIN_PHONE,
+                    'value' => trim($telephone)
+                ];
+            }
             $extra_info = email_collect_extra_info($name, $email_address, $customer_name, $customer_email, $customer_telephone);
-            $html_msg['EMAIL_MESSAGE'] = $enquiry;
-            $html_msg['CONTACT_US_OFFICE_FROM'] = OFFICE_FROM . "\t$name\n" .
-                OFFICE_EMAIL . "\t$email_address\n" .
-                (!empty($telephone) ? OFFICE_LOGIN_PHONE . "\t$telephone\n" : '');
+            $block['EXTRA_INFO'] = $extra_info;
             // Send message
-            zen_mail_from_template($send_to_name, $send_to_email, EMAIL_SUBJECT, $html_msg, $name, $email_address, 'contact_us');
+            zen_mail_from_template($send_to_name, $send_to_email, EMAIL_SUBJECT, $block, $name, $email_address, 'contact_us');
         }
         zen_redirect(zen_href_link(FILENAME_CONTACT_US, 'action=success', 'SSL'));
     } else {
@@ -131,7 +138,7 @@ if (zen_is_logged_in() && !zen_in_guest_checkout()) {
 // Otherwise, it's possible to submit the form without actually selecting a name!
 //
 $send_to_array = [];
-if (CONTACT_US_LIST !== ''){
+if (CONTACT_US_LIST !== '') {
     $send_to_array[] = ['id' => '', 'text' => PLEASE_SELECT];
     foreach (explode(',', CONTACT_US_LIST) as $k => $v) {
         $send_to_array[] = ['id' => (string)$k, 'text' => preg_replace('/\<[^*]*/', '', $v)];

@@ -1,5 +1,16 @@
 @include ('common_header_text')
-{!! $CONTACT_US_OFFICE_FROM !!}
+@foreach ($CONTEXT as $row)
+{!! $row['label'] !!}:	@if (gettype($row['value']) == 'array')
+{!! $row['value']['text'] !!}
+@else
+{!! $row['value'] !!}
+@endif
+@endforeach
+
 ----------------------------------------------
-{!! $EMAIL_MESSAGE !!}
+
+{!! strip_tags($EMAIL_MESSAGE) !!}
+
+----------------------------------------------
+
 @include ('common_footer_text')

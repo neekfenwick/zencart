@@ -110,7 +110,7 @@ if (isset($_GET['action']) && ($_GET['action'] == 'send')) {
             $send_to_array = [];
 
             // use contact us dropdown if defined and if a destination is provided
-            if (CONTACT_US_LIST != '' && isset($_POST['send_to'])){
+            if (CONTACT_US_LIST != '' && isset($_POST['send_to'])) {
                 $send_to_array = explode(",", CONTACT_US_LIST);
 
                 if (isset($send_to_array[$_POST['send_to']])) {
@@ -123,31 +123,50 @@ if (isset($_GET['action']) && ($_GET['action'] == 'send')) {
 
             // Assign email destination from array
             if (!empty($send_email_array)) {
-                $send_to_email= preg_replace ("/>/", "", $send_email_array[0]);
+                $send_to_email= preg_replace("/>/", "", $send_email_array[0]);
                 $send_to_email= trim(preg_replace("/</", "", $send_to_email));
                 $send_to_name = trim(preg_replace('/\<[^*]*/', '', $send_to_array[$_POST['send_to']]));
             }
 
+            // Prepare email template data
+            $block['EMAIL_MESSAGE'] = $_POST['enquiry'];
+            $block['CONTEXT'] = [
+                [ 'label' => OFFICE_FROM, 'value' => trim($name) ],
+                [ 'label' => OFFICE_EMAIL, 'value' => trim($email_address) ]
+            ];
+            if (!empty($telephone)) {
+                $block['CONTEXT'][] = [
+                    'label' => OFFICE_LOGIN_PHONE,
+                    'value' => trim($telephone) ];
+            }
+            $block['CONTEXT'][] = [
+                'label' => TEXT_PRODUCT_NAME,
+                'value' => [
+                    'text' => $product_details['products_name'] . "\n" .
+                        zen_href_link(FILENAME_PRODUCT_INFO, 'products_id=' . (int)$_GET['pid']),
+                    'html' => '<a href="' . zen_href_link(FILENAME_PRODUCT_INFO, 'products_id=' . (int)$_GET['pid']) . '">' .
+                    $product_details['products_name'] . '</a>'
+                ]
+            ];
             // Prepare extra-info details
-            $extra_info = email_collect_extra_info($name, $email_address, $customer_name, $customer_email, $customer_telephone);
-            // Prepare Text-only portion of message
-            $text_message = OFFICE_FROM . "\t" . $name . "\n" .
-            OFFICE_EMAIL . "\t" . $email_address . "\n";
-            if (!empty($telephone)) $text_message .= OFFICE_LOGIN_PHONE . "\t" . $telephone . "\n";
-            $text_message .= TEXT_PRODUCT_NAME . "\t" . $product_details['products_name'] . "\n" .
-            zen_href_link(FILENAME_PRODUCT_INFO, 'products_id=' . (int)$_GET['pid']) .
-            "\n";
-            $text_message .= "\n" .
-            '------------------------------------------------------' . "\n\n" .
-            strip_tags($_POST['enquiry']) .  "\n\n" .
-            '------------------------------------------------------' . "\n\n" .
-            $extra_info['TEXT'];
-            // Prepare HTML-portion of message
-            $html_msg['EMAIL_MESSAGE_HTML'] = '<b>' . TEXT_PRODUCT_NAME . '</b> <a href="' . zen_href_link(FILENAME_PRODUCT_INFO, 'products_id=' . (int)$_GET['pid']) . '">' . $product_details['products_name'] . '</a><br>' . strip_tags($_POST['enquiry']);
-            $html_msg['CONTACT_US_OFFICE_FROM'] = OFFICE_FROM . ' ' . $name . '<br>' . OFFICE_EMAIL . '(' . $email_address . ')';
-            $html_msg['EXTRA_INFO'] = $extra_info['HTML'];
+            $extra_info = email_collect_extra_info(
+                $name,
+                $email_address,
+                $customer_name,
+                $customer_email,
+                $customer_telephone
+            );
+            $block['EXTRA_INFO'] = $extra_info;
             // Send message
-            zen_mail($send_to_name, $send_to_email, $email_subject, $text_message, $name, $email_address, $html_msg,'ask_a_question');
+            zen_mail_from_template(
+                $send_to_name,
+                $send_to_email,
+                EMAIL_SUBJECT,
+                $block,
+                $name,
+                $email_address,
+                'contact_us'
+            );
         }
         zen_redirect(zen_href_link(FILENAME_ASK_A_QUESTION, 'action=success&pid=' . (int)$_GET['pid'], 'SSL'));
     } else {
@@ -186,7 +205,7 @@ if (zen_is_logged_in() && !zen_in_guest_checkout()) {
 }
 
 $send_to_array = array();
-if (CONTACT_US_LIST !=''){
+if (CONTACT_US_LIST !='') {
     foreach(explode(",", CONTACT_US_LIST) as $k => $v) {
         $send_to_array[] = array('id' => $k, 'text' => preg_replace('/\<[^*]*/', '', $v));
     }
