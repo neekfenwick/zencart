@@ -135,57 +135,58 @@ if ($_GET['action'] == 'process') {
       $gv_query = $db->bindVars($gv_query, ':email', $_POST['email'], 'string');
       $db->Execute($gv_query);
 
-      // build email content:
-      $gv_email = STORE_NAME . "\n" .
-      EMAIL_SEPARATOR . "\n" .
-      sprintf(EMAIL_GV_TEXT_HEADER, $currencies->format($_POST['amount'], false)) . "\n" .
-      EMAIL_SEPARATOR . "\n\n" .
-      sprintf(EMAIL_GV_FROM, $send_name) . "\n";
-
-      $html_msg['EMAIL_GV_TEXT_HEADER'] =  sprintf(EMAIL_GV_TEXT_HEADER, '');
-      $html_msg['EMAIL_GV_AMOUNT'] =  $currencies->format($_POST['amount'], false);
-      $html_msg['EMAIL_GV_FROM'] =  sprintf(EMAIL_GV_FROM, $send_name) ;
+      // build email template data
+      $html_msg['EMAIL_SEPARATOR'] = EMAIL_SEPARATOR;
+      $html_msg['EMAIL_GV_TEXT_HEADER'] = sprintf(EMAIL_GV_TEXT_HEADER, $amount_display);
+      $html_msg['EMAIL_GV_AMOUNT'] = $amount_display;
+      $html_msg['EMAIL_GV_FROM'] = sprintf(EMAIL_GV_FROM, $send_name) ;
 
       if (isset($_POST['message'])) {
-        $gv_email .= EMAIL_GV_MESSAGE . "\n\n";
-        $html_msg['EMAIL_GV_MESSAGE'] = EMAIL_GV_MESSAGE . '<br>';
+        $html_msg['EMAIL_GV_MESSAGE'] = EMAIL_GV_MESSAGE;
 
         if (isset($_POST['to_name'])) {
-          $gv_email .= sprintf(EMAIL_GV_SEND_TO, $_POST['to_name']) . "\n\n";
           $html_msg['EMAIL_GV_SEND_TO'] = '<tt>'.sprintf(EMAIL_GV_SEND_TO, $_POST['to_name']). '</tt><br>';
         }
-        $gv_email .= stripslashes($_POST['message']) . "\n\n";
-        $gv_email .= EMAIL_SEPARATOR . "\n\n";
-        $html_msg['EMAIL_MESSAGE_HTML'] = stripslashes($_POST['message']);
+        $html_msg['EMAIL_MESSAGE'] = stripslashes($_POST['message']);
       }
 
+      $gv_url = zen_href_link(FILENAME_GV_REDEEM, 'gv_no=' . $id1, 'NONSSL', false);
       $html_msg['GV_REDEEM_HOW'] = sprintf(EMAIL_GV_REDEEM, '<strong>' . $id1 . '</strong>');
-      $html_msg['GV_REDEEM_URL'] = '<a href="'.zen_href_link(FILENAME_GV_REDEEM, 'gv_no=' . $id1, 'NONSSL', false).'">'.EMAIL_GV_LINK.'</a>';
+      $html_msg['GV_REDEEM_URL'] = '<a href="' . $gv_url . '"> ' . EMAIL_GV_LINK . '</a>';
+      $html_msg['GV_REDEEM_URL_TEXT'] = EMAIL_GV_LINK . ' ' . $gv_url;
       $html_msg['GV_REDEEM_CODE'] = $id1;
-
-      $gv_email .= sprintf(EMAIL_GV_REDEEM, $id1) . "\n\n";
-      $gv_email .= EMAIL_GV_LINK . ' ' . zen_href_link(FILENAME_GV_REDEEM, 'gv_no=' . $id1, 'NONSSL', false);
-      $gv_email .= "\n\n";
-      $gv_email .= EMAIL_GV_FIXED_FOOTER . "\n\n";
-      $gv_email .= EMAIL_GV_SHOP_FOOTER;
 
       $gv_email_subject = sprintf(EMAIL_GV_TEXT_SUBJECT, $send_name);
 
       // include disclaimer
-      $gv_email .= "\n\n" . EMAIL_ADVISORY . "\n\n";
+      if (EMAIL_ARCHIVE == 'true') {
+        $html_msg['EMAIL_ADVISORY'] = EMAIL_ADVISORY;
+      }
 
       $html_msg['EMAIL_GV_FIXED_FOOTER'] = str_replace(array("\r\n", "\n", "\r", "-----"), '', EMAIL_GV_FIXED_FOOTER);
       $html_msg['EMAIL_GV_SHOP_FOOTER'] =	EMAIL_GV_SHOP_FOOTER;
 
       // send the email
-      zen_mail($_POST['to_name'], $_POST['email'], $gv_email_subject, nl2br($gv_email), STORE_NAME, EMAIL_FROM, $html_msg, 'gv_send');
+      zen_mail_from_template($_POST['to_name'], $_POST['email'], $gv_email_subject, $html_msg, STORE_NAME, EMAIL_FROM, 'gv_send');
 
       // send additional emails
       if (SEND_EXTRA_GV_CUSTOMER_EMAILS_TO_STATUS == '1' and SEND_EXTRA_GV_CUSTOMER_EMAILS_TO !='') {
-        $extra_info = email_collect_extra_info(ENTRY_NAME . $_POST['to_name'], ENTRY_EMAIL . $_POST['email'], $send_name , $account->fields['customers_email_address']);
-        $html_msg['EXTRA_INFO'] = $extra_info['HTML'];
-        zen_mail('', SEND_EXTRA_GV_CUSTOMER_EMAILS_TO, SEND_EXTRA_GV_CUSTOMER_EMAILS_TO_SUBJECT . ' ' . $gv_email_subject,
-        $gv_email . $extra_info['TEXT'], STORE_NAME, EMAIL_FROM, $html_msg,'gv_send_extra');
+        $extra_info = email_collect_extra_info(
+          ENTRY_NAME . $_POST['to_name'],
+          ENTRY_EMAIL . $_POST['email'],
+          $send_name,
+          $account->fields['customers_email_address']
+        );
+        $html_msg['EXTRA_INFO'] = $extra_info;
+        zen_mail_from_template(
+          '',
+          SEND_EXTRA_GV_CUSTOMER_EMAILS_TO,
+          SEND_EXTRA_GV_CUSTOMER_EMAILS_TO_SUBJECT . ' ' . $gv_email_subject,
+          $html_msg,
+          STORE_NAME,
+          EMAIL_FROM,
+          'gv_send_extra'
+        );
       }
 
       // do a fresh calculation after sending an email

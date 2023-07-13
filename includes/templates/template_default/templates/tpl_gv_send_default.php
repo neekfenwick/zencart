@@ -46,20 +46,32 @@ if ($action === 'doneprocess') {
 <!--BOF GV send confirm -->
     <h1 id="gvSendDefaultHeadingConfirm"><?php echo HEADING_TITLE_CONFIRM_SEND; ?></h1>
 
-    <?php echo zen_draw_form('gv_send_process', zen_href_link(FILENAME_GV_SEND, 'action=process', 'SSL', false)); ?>
+    <?php
+        $amount_display = $currencies->format($currencies->normalizeValue($_POST['amount']), false);
+        echo zen_draw_form('gv_send_process', zen_href_link(FILENAME_GV_SEND, 'action=process', 'SSL', false)); ?>
         <div id="gvSendDefaultMainMessage" class="content">
-            <?php echo sprintf(MAIN_MESSAGE, $currencies->format($currencies->normalizeValue($_POST['amount']), false), $to_name, $_POST['email']); ?>
+            <?php echo sprintf(MAIN_MESSAGE, $amount_display, $to_name, $_POST['email']); ?>
         </div>
 
+        <hr>
+
         <div id="gvSendDefaultMessageSecondary" class="content">
-            <?php echo sprintf(SECONDARY_MESSAGE, $to_name, $currencies->format($currencies->normalizeValue($_POST['amount']), false), $send_name); ?>
+            <?php echo sprintf(EMAIL_GV_TEXT_HEADER, $amount_display); ?>
         </div>
 <?php
     if (!empty($_POST['message'])) {
 ?>
-        <div id="gvSendDefaultMessagePersonal" class="content"><?php echo sprintf(PERSONAL_MESSAGE, $send_firstname); ?></div>
+        <div id="gvSendDefaultMessagePersonal" class="content"><?php
 
-        <div id="gvSendDefaultMessage" class="content"><?php echo stripslashes($_POST['message']); ?></div>
+        echo EMAIL_SEPARATOR . "<br><br>" .
+          sprintf(EMAIL_GV_FROM, $send_name) . ' ' . EMAIL_GV_MESSAGE . '<br><br>' .
+          sprintf(EMAIL_GV_SEND_TO, $_POST['to_name']);
+
+        ?></div>
+
+        <div id="gvSendDefaultMessage" class="content"><?php echo nl2br(stripslashes($_POST['message'])); ?></div>
+
+        <hr>
 <?php
     }
 
@@ -74,7 +86,9 @@ if ($action === 'doneprocess') {
     <?php echo '</form>'; ?>
     <br class="clearBoth">
 
+    <?php if (EMAIL_ARCHIVE == 'true') { ?>
     <div class="advisory"><?php echo EMAIL_ADVISORY_INCLUDED_WARNING . str_replace('-----', '', EMAIL_ADVISORY); ?></div>
+    <?php } ?>
 <!--EOF GV send confirm -->
 <?php
  } else {
