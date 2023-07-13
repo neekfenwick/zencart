@@ -613,7 +613,15 @@ class paypal_curl extends base {
       $this->log($message, $token);
       // extra debug email: //
       if (MODULE_PAYMENT_PAYPALWPP_DEBUGGING == 'Log and Email') {
-        zen_mail(STORE_NAME, STORE_OWNER_EMAIL_ADDRESS, 'PayPal Debug log - ' . $operation, $message, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>nl2br($message)), 'debug');
+        zen_mail_from_template(
+          STORE_NAME,
+          STORE_OWNER_EMAIL_ADDRESS,
+          'PayPal Debug log - ' . $operation,
+          $message,
+          STORE_OWNER,
+          STORE_OWNER_EMAIL_ADDRESS,
+          'debug'
+        );
       }
       $this->log($operation . ', Elapsed: ' . $elapsed . 'ms -- ' . (isset($values['ACK']) ? $values['ACK'] : ($success ? 'Succeeded' : 'Failed')) . $errors, $token);
 

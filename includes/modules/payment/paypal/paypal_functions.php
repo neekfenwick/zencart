@@ -30,7 +30,7 @@
     if(!isset($paypal_instance_id)) $paypal_instance_id = time() . '_' . zen_create_random_value(4);
     if ((defined('MODULE_PAYMENT_PAYPALWPP_DEBUGGING') && MODULE_PAYMENT_PAYPALWPP_DEBUGGING == 'Log and Email') || (defined('MODULE_PAYMENT_PAYPAL_IPN_DEBUG') && MODULE_PAYMENT_PAYPAL_IPN_DEBUG == 'Log and Email') || $always_send) {
       $paypal_error_counter ++;
-      zen_mail(STORE_OWNER, $email_address, $subjecttext . ' (' . $paypal_instance_id . ') #' . $paypal_error_counter, $message, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, array('EMAIL_MESSAGE_HTML'=>$message), 'debug');
+      zen_mail_from_template(STORE_OWNER, $email_address, $subjecttext . ' (' . $paypal_instance_id . ') #' . $paypal_error_counter, $message, STORE_OWNER, STORE_OWNER_EMAIL_ADDRESS, 'debug');
     }
     if ((defined('MODULE_PAYMENT_PAYPAL_IPN_DEBUG') && (MODULE_PAYMENT_PAYPAL_IPN_DEBUG == 'Log and Email' || MODULE_PAYMENT_PAYPAL_IPN_DEBUG == 'Log File' || MODULE_PAYMENT_PAYPAL_IPN_DEBUG == 'Yes')) || (defined('MODULE_PAYMENT_PAYPALWPP_DEBUGGING') && (MODULE_PAYMENT_PAYPALWPP_DEBUGGING == 'Log File' || MODULE_PAYMENT_PAYPALWPP_DEBUGGING == 'Log and Email'))) $logfile = ipn_add_error_log($message, $paypal_instance_id);
     return $logfile;
