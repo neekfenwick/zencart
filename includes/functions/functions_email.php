@@ -98,11 +98,6 @@
             return false;
         }
 
-        // If a simple string was passed, set up a template model with that as the message.
-        if (is_string($block)) {
-            $block = [ 'EMAIL_MESSAGE' => $block ];
-        }
-
         // Parse "from" addresses for "name" <email@address.com> structure, and supply name/address info from it.
         if (preg_match("/ *([^<]*) *<([^>]*)> */i", $from_email_address, $regs)) {
             $from_email_name = trim($regs[1]);
@@ -118,10 +113,10 @@
         // loop thru multiple email recipients if more than one listed  --- (esp for the admin's "Extra" emails)...
         foreach (explode(',', $to_address) as $key => $value) {
             if (preg_match("/ *([^<]*) *<([^>]*)> */i", $value, $regs)) {
-            $to_name = str_replace('"', '', trim($regs[1]));
-            $to_email_address = $regs[2];
+                $to_name = str_replace('"', '', trim($regs[1]));
+                $to_email_address = $regs[2];
             } elseif (preg_match("/ *([^ ]*) */i", $value, $regs)) {
-            $to_email_address = trim($regs[1]);
+                $to_email_address = trim($regs[1]);
             }
             if (!isset($to_email_address)) {
                 $to_email_address = trim($to_address); //if not more than one, just use the main one.
@@ -130,34 +125,38 @@
             $zco_notifier->notify('NOTIFY_EMAIL_ADDRESS_TEST', array(), $to_name, $to_email_address, $email_subject);
             // ensure the address is valid, to prevent unnecessary delivery failures
             if (!zen_validate_email($to_email_address)) {
-            $zco_notifier->notify('NOTIFY_EMAIL_ADDRESS_VALIDATION_FAILURE', sprintf(EMAIL_SEND_FAILED . ' (failed validation)', $to_name, $to_email_address, $email_subject));
-            error_log(sprintf(EMAIL_SEND_FAILED . ' (failed validation)', $to_name, $to_email_address, $email_subject));
-            continue;
+                $zco_notifier->notify('NOTIFY_EMAIL_ADDRESS_VALIDATION_FAILURE', sprintf(EMAIL_SEND_FAILED . ' (failed validation)', $to_name, $to_email_address, $email_subject));
+                error_log(sprintf(EMAIL_SEND_FAILED . ' (failed validation)', $to_name, $to_email_address, $email_subject));
+                continue;
             }
 
-            //define some additional template data
-            if (empty($block['EMAIL_TO_NAME'])) {
-                $block['EMAIL_TO_NAME'] = $to_name;
-            }
-            if (empty($block['EMAIL_TO_ADDRESS'])) {
-                $block['EMAIL_TO_ADDRESS'] = $to_email_address;
-            }
-            if (empty($block['EMAIL_SUBJECT'])) {
-                $block['EMAIL_SUBJECT'] = $email_subject;
-            }
-            if (empty($block['EMAIL_FROM_NAME'])) {
-                $block['EMAIL_FROM_NAME'] = $from_email_name;
-            }
-            if (empty($block['EMAIL_FROM_ADDRESS'])) {
-                $block['EMAIL_FROM_ADDRESS'] = $from_email_address;
-            }
-
-            $templates = zen_build_html_email_from_blade_template($module, $block);
-            $email_html = $templates['html'];
-            $email_text = $templates['text'];
-
-            if (!is_array($block) && ($block === '' || $block === 'none')) {
+            // If a simple string was passed, set up a template model with that as the message.
+            if (is_string($block) && $block !== 'none') {
                 $email_html = '';
+                $email_text = $block;
+            } else {
+                // We have a template data block to expand using a template.
+
+                //define some additional template data
+                if (empty($block['EMAIL_TO_NAME'])) {
+                    $block['EMAIL_TO_NAME'] = $to_name;
+                }
+                if (empty($block['EMAIL_TO_ADDRESS'])) {
+                    $block['EMAIL_TO_ADDRESS'] = $to_email_address;
+                }
+                if (empty($block['EMAIL_SUBJECT'])) {
+                    $block['EMAIL_SUBJECT'] = $email_subject;
+                }
+                if (empty($block['EMAIL_FROM_NAME'])) {
+                    $block['EMAIL_FROM_NAME'] = $from_email_name;
+                }
+                if (empty($block['EMAIL_FROM_ADDRESS'])) {
+                    $block['EMAIL_FROM_ADDRESS'] = $from_email_address;
+                }
+
+                $templates = zen_build_html_email_from_blade_template($module, $block);
+                $email_html = $templates['html'];
+                $email_text = $templates['text'];
             }
 
             $ErrorInfo .= zen_email_workhorse(
@@ -169,7 +168,7 @@
                 $from_email_name,
                 $from_email_address,
                 $module,
-                $attachments
+                $attachments_list
             );
 
         } // end foreach loop thru possible multiple email addresses
@@ -312,6 +311,20 @@
         return empty($ErrorInfo) ? '' : nl2br($ErrorInfo);
     }  // end function
 
+    /**
+     * Send an email with the supplied text and HTML body portions and associated attachments.
+     *
+     * @param string $to_name
+     * @param string $to_email_address
+     * @param string $email_subject
+     * @param string $email_text
+     * @param string $email_html
+     * @param string $from_email_name
+     * @param string $from_email_address
+     * @param string $module
+     * @param mixed $attachments_list
+     * @return string
+     */
     function zen_email_workhorse(
         string $to_name,
         string $to_email_address,
@@ -798,7 +811,7 @@
         email_add_common_data($block);
 
         // Obtain the template file to be used
-        $template_filename_base = DIR_FS_EMAIL_TEMPLATES . $langfolder . 'email_template_';
+        $template_filename_base = DIR_FS_EMAIL_TEMPLATES . 'legacy/' . $langfolder . 'email_template_';
         $template_filename_base_en = DIR_FS_EMAIL_TEMPLATES . 'email_template_';
         $template_filename = DIR_FS_EMAIL_TEMPLATES . $langfolder . 'email_template_' . $current_page_base . '.html';
 
