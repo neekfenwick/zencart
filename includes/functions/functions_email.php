@@ -40,476 +40,144 @@
      */
     zen_define_default('SMTPAUTH_EMAIL_PROTOCOL', 'none');
 
-/**
- * NOTE: Shamelessly copied and edited from the old zen_mail function.  Needs a proper refactoring, or replacement of zen_mail.
- * The main difference is we have no $email_text parameter, and we use Blade templates, optionally using a separate Text one if found.
- *
- * @param string $to_name
- * @param string $to_address
- * @param string $email_subject
- * @param string $from_email_name
- * @param string $from_email_address
- * @param mixed  $block A string if simple email content, or array of template data for complex templates.
- * @param string $module
- * @param mixed $attachments_list Single string or array of strings, files to attach.
- * @param string $email_reply_to_name
- * @param string $email_reply_to_address
- * @return void
- */
-function zen_mail_from_template(string $to_name, string $to_address,
-  string $email_subject, mixed $block, string $from_email_name, string $from_email_address,
-  string $module='default', /* cannot init correctly: mixed */ $attachments_list='',
-  string $email_reply_to_name = '', string $email_reply_to_address = '' ) {
-
-  global $db, $messageStack, $zco_notifier;
-  if (SEND_EMAILS !== 'true') {
-    return false;
-  }  // if sending email is disabled in Admin, just exit
-
-  if (defined('DEVELOPER_OVERRIDE_EMAIL_STATUS') && DEVELOPER_OVERRIDE_EMAIL_STATUS === 'false') {
-    return false;
-  }  // disable email sending when in developer mode
-  if (defined('DEVELOPER_OVERRIDE_EMAIL_ADDRESS') && DEVELOPER_OVERRIDE_EMAIL_ADDRESS !== '') {
-    $to_address = DEVELOPER_OVERRIDE_EMAIL_ADDRESS;
-  }
-
-  // ignore sending emails for any of the following pages
-  // (The EMAIL_MODULES_TO_SKIP constant can be defined in a new file in the "extra_configures" folder)
-  if (defined('EMAIL_MODULES_TO_SKIP') && in_array($module,explode(",",constant('EMAIL_MODULES_TO_SKIP')))) {
-    return false;
-  }
-
-  // check for injection attempts. If new-line characters found in header fields, simply fail to send the message
-  foreach(array($from_email_address, $to_address, $from_email_name, $to_name, $email_subject) as $key=>$value) {
-    if (strpos($value, "\r") !== false || strpos($value, "\n") !== false) {
-        return false;
-    }
-  }
-
-  // if an empty html-msg supplied, exit
-  if ((isset($block['EMAIL_MESSAGE']) && $block['EMAIL_MESSAGE'] == '')) return false;
-
-  // If a simple string was passed, set up a template model with that as the message.
-  if (is_string($block)) {
-    $block = [ 'EMAIL_MESSAGE' => $block ];
-  }
-
-  // Parse "from" addresses for "name" <email@address.com> structure, and supply name/address info from it.
-  if (preg_match("/ *([^<]*) *<([^>]*)> */i",$from_email_address,$regs)) {
-    $from_email_name = trim($regs[1]);
-    $from_email_address = $regs[2];
-  }
-  // if email name is empty or the same as email address, use the Store Name as the senders 'Name'
-  if (empty($from_email_name) || $from_email_name === $from_email_address) {
-    $from_email_name = STORE_NAME;
-  }
-
-  // loop thru multiple email recipients if more than one listed  --- (esp for the admin's "Extra" emails)...
-  foreach(explode(',',$to_address) as $key=>$value) {
-    if (preg_match("/ *([^<]*) *<([^>]*)> */i",$value,$regs)) {
-      $to_name = str_replace('"', '', trim($regs[1]));
-      $to_email_address = $regs[2];
-    } elseif (preg_match("/ *([^ ]*) */i",$value,$regs)) {
-      $to_email_address = trim($regs[1]);
-    }
-    if (!isset($to_email_address)) $to_email_address=trim($to_address); //if not more than one, just use the main one.
-
-    $zco_notifier->notify('NOTIFY_EMAIL_ADDRESS_TEST', array(), $to_name, $to_email_address, $email_subject);
-    // ensure the address is valid, to prevent unnecessary delivery failures
-    if (!zen_validate_email($to_email_address)) {
-      $zco_notifier->notify('NOTIFY_EMAIL_ADDRESS_VALIDATION_FAILURE', sprintf(EMAIL_SEND_FAILED . ' (failed validation)', $to_name, $to_email_address, $email_subject));
-      error_log(sprintf(EMAIL_SEND_FAILED . ' (failed validation)', $to_name, $to_email_address, $email_subject));
-      continue;
-    }
-
-    //define some additional template data
-    if (empty($block['EMAIL_TO_NAME'])) {
-        $block['EMAIL_TO_NAME'] = $to_name;
-    }
-    if (empty($block['EMAIL_TO_ADDRESS'])) {
-        $block['EMAIL_TO_ADDRESS'] = $to_email_address;
-    }
-    if (empty($block['EMAIL_SUBJECT'])) {
-        $block['EMAIL_SUBJECT'] = $email_subject;
-    }
-    if (empty($block['EMAIL_FROM_NAME'])) {
-        $block['EMAIL_FROM_NAME'] = $from_email_name;
-    }
-    if (empty($block['EMAIL_FROM_ADDRESS'])) {
-        $block['EMAIL_FROM_ADDRESS'] = $from_email_address;
-    }
-
-    $templates = zen_build_html_email_from_blade_template($module, $block);
-    $email_html = $templates['html'];
-    $email_text = $templates['text'];
-
-    if (!is_array($block) && ($block === '' || $block === 'none')) {
-        $email_html = '';
-    }
-
-    // Build the email based on whether customer has selected HTML or TEXT, and whether we have supplied HTML or TEXT-only components
-    // special handling for XML content
-    // TODO Not sure how much to keep, xml_record branch?
-    // if ($email_text === '') {
-    //     $email_text = str_replace(
-    //         [
-    //             '<br>',
-    //             '<br />',
-    //             '</p>',
-    //         ],
-    //         [
-    //             "<br>\n",
-    //             "<br>\n",
-    //             "</p>\n",
-    //         ],
-    //         $block['EMAIL_MESSAGE_HTML']
-    //     );
-    //     $email_text = ($module !== 'xml_record') ? zen_output_string_protected(stripslashes(strip_tags($email_text))) : $email_text;
-    // } else
-    if ($module !== 'xml_record') {
-      $email_text = preg_replace('~</?([^(strong>|br ?\/?>|a href=|p |span|script|li|ol|ul|em|b>|i>|u>)])~', '@lt@\\1', $email_text);
-      $email_text = strip_tags($email_text);
-      $email_text = str_replace('@lt@', '<', $email_text);
-    }
-
-    if (zen_is_non_transactional_email($module)) {
-      if (defined('EMAIL_DISCLAIMER') && EMAIL_DISCLAIMER !== '' && !strstr($email_text, sprintf(EMAIL_DISCLAIMER, STORE_OWNER_EMAIL_ADDRESS)) && $to_email_address !== STORE_OWNER_EMAIL_ADDRESS && !defined('EMAIL_DISCLAIMER_NEW_CUSTOMER')) {
-        $email_text .= "\n" . sprintf(EMAIL_DISCLAIMER, STORE_OWNER_EMAIL_ADDRESS);
-      }
-      if (defined('EMAIL_SPAM_DISCLAIMER') && EMAIL_SPAM_DISCLAIMER !== '' && !strstr($email_text, EMAIL_SPAM_DISCLAIMER) && $to_email_address !== STORE_OWNER_EMAIL_ADDRESS) {
-        $email_text .= "\n\n" . EMAIL_SPAM_DISCLAIMER;
-      }
-    }
-
-    // bof: body of the email clean-up
-    // clean up &amp; and && from email text
-    $email_text = preg_replace('/(&amp;)+/', '&amp;', $email_text);
-    $email_text = preg_replace('/(&amp;)+/', '&', $email_text);
-    $email_text = preg_replace('/&{2,}/', '&', $email_text);
-
-    // clean up currencies for text emails
-    if (defined('CURRENCIES_TRANSLATIONS') && !empty(CURRENCIES_TRANSLATIONS)) {
-        $zen_fix_currencies = preg_split("/[:,]/" , str_replace(' ', '', CURRENCIES_TRANSLATIONS));
-        $size = count($zen_fix_currencies);
-        for ($i=0, $n=$size; $i<$n; $i+=2) {
-            if (empty($zen_fix_currencies[$i+1])) {
-                break;
-            }
-            $zen_fix_current = $zen_fix_currencies[$i];
-            $zen_fix_replace = $zen_fix_currencies[$i+1];
-            if (strlen($zen_fix_current) !== 0) {
-                while (strpos($email_text, $zen_fix_current)) {
-                    $email_text = str_replace($zen_fix_current, $zen_fix_replace, $email_text);
-                }
-            }
-        }
-    }
-
-    // fix double quotes
-    $email_text = preg_replace('/(&quot;)+/', '"', $email_text);
-    // fix symbols
-    $email_text = preg_replace('/(&lt;)+/', '<', $email_text);
-    $email_text = preg_replace('/(&gt;)+/', '>', $email_text);
-    // prevent null characters
-    $email_text = preg_replace('/\0+/', ' ', $email_text);
-
-    // fix slashes
-    $text = stripslashes($email_text);
-    $email_html = stripslashes($email_html);
-
-    // eof: body of the email clean-up
-
-    //determine customer's email preference type: HTML or TEXT-ONLY  (HTML assumed if not specified)
-    $sql = "SELECT customers_email_format FROM " . TABLE_CUSTOMERS . " WHERE customers_email_address= :custEmailAddress:";
-    $sql = $db->bindVars($sql, ':custEmailAddress:', $to_email_address, 'string');
-    $result = $db->Execute($sql);
-    $customers_email_format = ($result->RecordCount() > 0) ? $result->fields['customers_email_format'] : '';
-
     /**
-     * Valid formats:
-     * HTML - if HTML content has been provided/prepared, it will be used. EMAIL_USE_HTML must be set to true in configs
-     * TEXT - a text-only version of the email will be sent, and the HTML version ignored
-     * NONE or OUT - implies opt-out, ie: send no emails, so aborts sending
+     * Build and send Text and HTML email bodies from a set of template data using Blade templates.
+     *
+     * @param string $to_name
+     * @param string $to_address
+     * @param string $email_subject
+     * @param string $from_email_name
+     * @param string $from_email_address
+     * @param mixed  $block A string if simple email content, or array of template data for complex templates.
+     * @param string $module
+     * @param mixed $attachments_list Single string or array of strings, files to attach.
+     * @param string $email_reply_to_name
+     * @param string $email_reply_to_address
+     * @return void
      */
-    $zco_notifier->notify('NOTIFY_EMAIL_DETERMINING_EMAIL_FORMAT', $to_email_address, $customers_email_format, $module);
+    function zen_mail_from_template(
+        string $to_name,
+        string $to_address,
+        string $email_subject,
+        mixed $block,
+        string $from_email_name,
+        string $from_email_address,
+        string $module = 'default',
+        $attachments_list='', /* cannot init correctly: mixed */
+        string $email_reply_to_name = '',
+        string $email_reply_to_address = ''
+    ) {
 
-    if ($customers_email_format === 'NONE' || $customers_email_format === 'OUT') continue; //if requested no mail, then don't send, but continue processing others.
+        global $db, $messageStack, $zco_notifier;
+        if (SEND_EMAILS !== 'true') {
+            return false;
+        }  // if sending email is disabled in Admin, just exit
 
-    // handling admin/"extra"/copy emails:
-    if (ADMIN_EXTRA_EMAIL_FORMAT === 'TEXT' && substr($module,-6) === '_extra') {
-      $email_html='';  // just blank out the html portion if admin has selected text-only
-    }
-    //determine what format to send messages in if this is an admin email for newsletters:
-    if ($customers_email_format === '' && ADMIN_EXTRA_EMAIL_FORMAT === 'HTML' && in_array($module, array('newsletters', 'product_notification')) && isset($_SESSION['admin_id'])) {
-      $customers_email_format = 'HTML';
-    }
-
-    // special handling for XML content
-    if ($module === 'xml_record') {
-      $email_html = '';
-      $customers_email_format ='TEXT';
-    }
-
-    //notifier intercept option
-    $zco_notifier->notify('NOTIFY_EMAIL_AFTER_EMAIL_FORMAT_DETERMINED');
-
-    // Create a new mail object with the phpmailer class
-    $mail = new PHPMailer();
-    $mail->XMailer = 'Self-Hosted Zen Cart merchant';
-    $lang_code = strtolower(($_SESSION['languages_code'] === '' ? 'en' : $_SESSION['languages_code'] ));
-    $mail->SetLanguage($lang_code);
-    $mail->CharSet =  (defined('CHARSET')) ? CHARSET : 'iso-8859-1';
-    if (defined('EMAIL_ENCODING_METHOD') && EMAIL_ENCODING_METHOD !== '') {
-        $mail->Encoding = EMAIL_ENCODING_METHOD;
-    }
-    if ((int)EMAIL_SYSTEM_DEBUG > 0 ) $mail->SMTPDebug = (int)EMAIL_SYSTEM_DEBUG;
-    if ((int)EMAIL_SYSTEM_DEBUG > 4 ) $mail->Debugoutput = 'error_log';
-
-    $sending_newsletter = false;
-    $email_transport = EMAIL_TRANSPORT;
-    $email_mailbox = EMAIL_SMTPAUTH_MAILBOX;
-    $email_password = EMAIL_SMTPAUTH_PASSWORD;
-    $email_mail_server = EMAIL_SMTPAUTH_MAIL_SERVER;
-    $email_mail_server_port = (int)EMAIL_SMTPAUTH_MAIL_SERVER_PORT;
-    if (defined('NEWSLETTER_MODULES') && !empty(NEWSLETTER_MODULES) && defined('NEWSLETTER_EMAIL_SMTPAUTH_MAIL_SERVER') && !empty(NEWSLETTER_EMAIL_SMTPAUTH_MAIL_SERVER)) {
-      $modules = explode(',', str_replace(' ', '', NEWSLETTER_MODULES));
-      if (in_array($module, $modules)) {
-          $sending_newsletter = true;
-          $email_transport = 'smtpauth';
-          $email_mailbox = NEWSLETTER_EMAIL_SMTPAUTH_MAILBOX;
-          $email_password = NEWSLETTER_EMAIL_SMTPAUTH_PASSWORD;
-          $email_mail_server = NEWSLETTER_EMAIL_SMTPAUTH_MAIL_SERVER;
-          $email_mail_server_port = (int)NEWSLETTER_EMAIL_SMTPAUTH_MAIL_SERVER_PORT;
-      }
-    }
-
-    switch ($email_transport) {
-      case ('Gmail'):
-        $mail->isSMTP();
-        $mail->SMTPAuth = true;
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
-        $mail->Host = 'smtp.gmail.com';
-        $mail->Username = (!empty(trim($email_mailbox))) ? trim($email_mailbox) : EMAIL_FROM;
-        if (trim($email_password) !== '') $mail->Password = trim($email_password);
-        break;
-      case 'smtpauth':
-        $mail->isSMTP();
-        $mail->SMTPAuth = true;
-        $mail->Username = (!empty(trim($email_mailbox))) ? trim($email_mailbox) : EMAIL_FROM;
-        if (trim($email_password) !== '') $mail->Password = trim($email_password);
-        $mail->Host = (trim($email_mail_server) !== '') ? trim($email_mail_server) : 'localhost';
-        if ($email_mail_server_port !== 25 && $email_mail_server_port !== 0) {
-            $mail->Port = $email_mail_server_port;
-        }
-        if ($mail->Port < 30 && $mail->Host === 'smtp.gmail.com') {
-            $mail->Port = 587;
-        }
-        //set encryption protocol to allow support for secured email protocols
-        if ($mail->Port === '465') {
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-        }
-        if ($mail->Port === '587') {
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        if (defined('DEVELOPER_OVERRIDE_EMAIL_STATUS') && DEVELOPER_OVERRIDE_EMAIL_STATUS === 'false') {
+            return false;
+        }  // disable email sending when in developer mode
+        if (defined('DEVELOPER_OVERRIDE_EMAIL_ADDRESS') && DEVELOPER_OVERRIDE_EMAIL_ADDRESS !== '') {
+            $to_address = DEVELOPER_OVERRIDE_EMAIL_ADDRESS;
         }
 
-        if (!$sending_newsletter) {
-            if (defined('SMTPAUTH_EMAIL_PROTOCOL') && SMTPAUTH_EMAIL_PROTOCOL !== 'none') {
-                $mail->SMTPSecure = SMTPAUTH_EMAIL_PROTOCOL;
-            } elseif (defined('NEWSLETTER_SMTPAUTH_EMAIL_PROTOCOL') && NEWSLETTER_SMTPAUTH_EMAIL_PROTOCOL !== 'none') {
-                $mail->SMTPSecure = NEWSLETTER_SMTPAUTH_EMAIL_PROTOCOL;
+        // ignore sending emails for any of the following pages
+        // (The EMAIL_MODULES_TO_SKIP constant can be defined in a new file in the "extra_configures" folder)
+        if (defined('EMAIL_MODULES_TO_SKIP') && in_array($module, explode(',', constant('EMAIL_MODULES_TO_SKIP')))) {
+            return false;
+        }
+
+        // check for injection attempts. If new-line characters found in header fields, simply fail to send the message
+        foreach([$from_email_address, $to_address, $from_email_name, $to_name, $email_subject] as $key => $value) {
+            if (strpos($value, "\r") !== false || strpos($value, "\n") !== false) {
+                return false;
             }
         }
-        break;
-      case 'smtp':
-        $mail->isSMTP();
-        $mail->Host = trim($email_mail_server);
-        if ((int)$email_mail_server_port != 25 && (int)$email_mail_server_port != 0) $mail->Port = (int)$email_mail_server_port;
-        break;
-      case 'PHP':
-        $mail->isMail();
-        break;
-      case 'Qmail':
-        $mail->isQmail();
-        break;
-      case 'sendmail':
-      case 'sendmail-f':
-      default:
-        $mail->isSendmail();
-        if (defined('EMAIL_SENDMAIL_PATH') && file_exists(trim(EMAIL_SENDMAIL_PATH))) $mail->Sendmail = trim(EMAIL_SENDMAIL_PATH);
-        break;
-    }
 
-    $mail->Subject  = $email_subject;
-
-    if ($email_transport === 'sendmail-f' || EMAIL_SEND_MUST_BE_STORE === 'Yes') {
-      $mail->Sender = EMAIL_FROM;
-    }
-
-    // set the reply-to address.  If none set yet, then use Store's default email name/address.
-    // If sending from checkout or contact-us, use the supplied info
-    $email_reply_to_address = (!empty($email_reply_to_address)) ? $email_reply_to_address : (in_array($module, ['contact_us', 'ask_a_question', 'checkout_extra']) ? $from_email_address : EMAIL_FROM);
-    $email_reply_to_name = (!empty($email_reply_to_name)) ? $email_reply_to_name : (in_array($module, ['contact_us', 'ask_a_question', 'checkout_extra']) ? $from_email_name : STORE_NAME);
-    $mail->addReplyTo($email_reply_to_address, $email_reply_to_name);
-
-    $mail->setFrom($from_email_address, $from_email_name);
-    // if mailserver requires that all outgoing mail must go "from" an email address matching domain on server, set it to store address
-    if (EMAIL_SEND_MUST_BE_STORE === 'Yes') $mail->From = EMAIL_FROM;
-
-    $mail->addAddress($to_email_address, $to_name);
-    //$mail->addAddress($to_email_address);    // (alternate format if no name, since name is optional)
-    //$mail->addBCC(STORE_OWNER_EMAIL_ADDRESS, STORE_NAME);
-    //$mail->addCC(email_address);
-
-    if (EMAIL_USE_HTML === 'true') {
-        $email_html = processEmbeddedImages($email_html, $mail);
-    }
-
-    // PROCESS FILE ATTACHMENTS
-    if ($attachments_list === '') {
-        $attachments_list = [];
-    }
-    if (is_string($attachments_list)) {
-      if (file_exists($attachments_list)) {
-        $attachments_list = array(array('file' => $attachments_list));
-      } elseif (file_exists(DIR_FS_CATALOG . $attachments_list)) {
-        $attachments_list = array(array('file' => DIR_FS_CATALOG . $attachments_list));
-      } else {
-        $attachments_list = array();
-      }
-    }
-    global $newAttachmentsList;
-    $zco_notifier->notify('NOTIFY_EMAIL_BEFORE_PROCESS_ATTACHMENTS', array('attachments'=>$attachments_list, 'module'=>$module), $mail, $attachments_list);
-    if (isset($newAttachmentsList) && is_array($newAttachmentsList)) {
-        $attachments_list = $newAttachmentsList;
-    }
-    if (defined('EMAIL_ATTACHMENTS_ENABLED') && EMAIL_ATTACHMENTS_ENABLED && is_array($attachments_list) && $attachments_list !== []) {
-        foreach ($attachments_list as $key => $val) {
-            $fname = $val['name'] ?? null;
-            $mimeType = (!empty($val['mime_type']) && $val['mime_type'] !== 'application/octet-stream') ? $val['mime_type'] : '';
-            switch (true) {
-                case (!empty($val['raw_data'])):
-                    $fdata = $val['raw_data'];
-                    if ($mimeType !== '') {
-                        $mail->addStringAttachment($fdata, $fname, 'base64', $mimeType);
-                    } else {
-                        $mail->addStringAttachment($fdata, $fname);
-                    }
-                    break;
-                case (isset($val['file']) && file_exists($val['file'])): //'file' portion must contain the full path to the file to be attached
-                    $fdata = $val['file'];
-                    try {
-                        if ($mimeType !== '') {
-                            $mail->addAttachment($fdata, $fname, 'base64', $mimeType);
-                        } else {
-                            $mail->addAttachment($fdata, $fname);
-                        }
-                    } catch (\Exception $exception) {
-                        $messageStack->add_session('Error: could not add attachment. ' . $exception->getMessage(), 'error');
-                    }
-                    break;
-            } // end switch
-        } //end foreach attachments_list
-    } //endif attachments_enabled
-    $zco_notifier->notify('NOTIFY_EMAIL_AFTER_PROCESS_ATTACHMENTS', count($attachments_list));
-
-    // prepare content sections:
-    if (EMAIL_USE_HTML === 'true' && trim($email_html) !== '' &&
-       ($customers_email_format === 'HTML' || (ADMIN_EXTRA_EMAIL_FORMAT !== 'TEXT' && substr($module,-6) === '_extra')))
-    {
-      // Prepare HTML message
-      $mail->msgHTML($email_html);
-      if ($text !== '') {
-        // apply the supplied text-only portion instead of the auto-generated portion
-        $mail->AltBody = $text;
-      }
-    }  else {
-      // If we got here, then other rules specified to send a text-only message instead of HTML
-      $mail->Body = $text;
-    }
-
-    // Treat marketing notices as bulk
-    if (in_array($module, array('newsletters', 'product_notification'))) {
-      $mail->addCustomHeader('Precedence: bulk');
-    }
-
-    $mail->addCustomHeader('Auto-Submitted: auto-generated');
-
-    $oldVars = array(); $tmpVars = array('REMOTE_ADDR', 'HTTP_X_FORWARDED_FOR', 'PHP_SELF', $mail->Mailer === 'smtp' ? null : 'SERVER_NAME');
-    foreach ($tmpVars as $key) {
-      if (isset($_SERVER[$key])) {
-        $oldVars[$key] = $_SERVER[$key];
-        $_SERVER[$key] = '';
-      }
-      if ($key === 'REMOTE_ADDR') {
-        $_SERVER[$key] = HTTP_SERVER;
-      } elseif ($key === 'PHP_SELF') {
-        $_SERVER[$key] = '/obf'.'us'.'cated';
-      }
-    }
-    ini_set('mail.add_x_header', 0);
-
-    $ErrorInfo = '';
-
-    // set Hostname, since it can aid in delivery of emails.
-    $defaultHostname = preg_replace('~(^https?://|\/.*$)~', '', defined('HTTP_CATALOG_SERVER') ? HTTP_CATALOG_SERVER : HTTP_SERVER);
-    // If emails are being rejected, comment out the following line and try again:
-    $mail->Hostname = defined('EMAIL_HOSTNAME') ? EMAIL_HOSTNAME : $defaultHostname;
-
-    $zco_notifier->notify('NOTIFY_EMAIL_READY_TO_SEND', array($mail), $mail);
-    /**
-     * Send the email. If an error occurs, trap it and display it in the messageStack
-     */
-    $success = false;
-    try {
-       $success = $mail->send();
-    } catch (Exception $e) {
-    }
-    if (!$success) {
-      $msg = sprintf(EMAIL_SEND_FAILED , $to_name, $to_email_address, $email_subject) . '&nbsp;' . $mail->ErrorInfo;
-      if ($messageStack !== null) {
-        if (IS_ADMIN_FLAG === true) {
-          $messageStack->add_session($msg, 'error');
-        } else {
-          $messageStack->add('header', $msg, 'error');
+        // if an empty html-msg supplied, exit
+        if (isset($block['EMAIL_MESSAGE']) && empty($block['EMAIL_MESSAGE'])) {
+            return false;
         }
-      } else {
-        error_log($msg);
-      }
-      $ErrorInfo .= ($mail->ErrorInfo !== '') ? $mail->ErrorInfo . "\n" : '';
-    }
-    $zco_notifier->notify('NOTIFY_EMAIL_AFTER_SEND');
-    foreach($oldVars as $key => $val) {
-      $_SERVER[$key] = $val;
-    }
 
-    $zco_notifier->notify('NOTIFY_EMAIL_AFTER_SEND_WITH_ALL_PARAMS', array($to_name, $to_email_address, $from_email_name, $from_email_address, $email_subject, $email_html, $text, $module, $ErrorInfo));
-    // Archive this message to storage log
-    // don't archive pwd-resets and CC numbers
-    if (EMAIL_ARCHIVE === 'true'  && $module !== 'password_forgotten_admin' && $module !== 'cc_middle_digs' && $module !== 'no_archive') {
-      zen_mail_archive_write($to_name, $to_email_address, $from_email_name, $from_email_address, $email_subject, $email_html, $text, $module, $ErrorInfo );
-    } // endif archiving
-
-    // -----
-    // If a mail-related error (reported by PHPMailer) occurred, treat the 'recipients_failed' message as a special
-    // case, logging to a differently-named log file to make finding these issues easier.  Otherwise, log a PHP notice.
-    //
-    if ($ErrorInfo !== '') {
-        $mail_langs = $mail->getTranslations();
-        if (strpos($ErrorInfo, $mail_langs['recipients_failed']) === false) {
-            trigger_error('Email Error: ' . $ErrorInfo);
-        } else {
-            $log_prefix = (IS_ADMIN_FLAG === true) ? '/myDEBUG-bounced-email-adm-' : '/myDEBUG-bounced-email-';
-            $log_date = new DateTime();
-            error_log('Request URI: ' . $_SERVER['REQUEST_URI'] . PHP_EOL . PHP_EOL . $ErrorInfo, 3, DIR_FS_LOGS . $log_prefix . $log_date->format('Ymd-His-u') . '.log');
+        // If a simple string was passed, set up a template model with that as the message.
+        if (is_string($block)) {
+            $block = [ 'EMAIL_MESSAGE' => $block ];
         }
+
+        // Parse "from" addresses for "name" <email@address.com> structure, and supply name/address info from it.
+        if (preg_match("/ *([^<]*) *<([^>]*)> */i", $from_email_address, $regs)) {
+            $from_email_name = trim($regs[1]);
+            $from_email_address = $regs[2];
+        }
+        // if email name is empty or the same as email address, use the Store Name as the senders 'Name'
+        if (empty($from_email_name) || $from_email_name === $from_email_address) {
+            $from_email_name = STORE_NAME;
+        }
+
+        $ErrorInfo = '';
+
+        // loop thru multiple email recipients if more than one listed  --- (esp for the admin's "Extra" emails)...
+        foreach (explode(',', $to_address) as $key => $value) {
+            if (preg_match("/ *([^<]*) *<([^>]*)> */i", $value, $regs)) {
+            $to_name = str_replace('"', '', trim($regs[1]));
+            $to_email_address = $regs[2];
+            } elseif (preg_match("/ *([^ ]*) */i", $value, $regs)) {
+            $to_email_address = trim($regs[1]);
+            }
+            if (!isset($to_email_address)) {
+                $to_email_address = trim($to_address); //if not more than one, just use the main one.
+            }
+
+            $zco_notifier->notify('NOTIFY_EMAIL_ADDRESS_TEST', array(), $to_name, $to_email_address, $email_subject);
+            // ensure the address is valid, to prevent unnecessary delivery failures
+            if (!zen_validate_email($to_email_address)) {
+            $zco_notifier->notify('NOTIFY_EMAIL_ADDRESS_VALIDATION_FAILURE', sprintf(EMAIL_SEND_FAILED . ' (failed validation)', $to_name, $to_email_address, $email_subject));
+            error_log(sprintf(EMAIL_SEND_FAILED . ' (failed validation)', $to_name, $to_email_address, $email_subject));
+            continue;
+            }
+
+            //define some additional template data
+            if (empty($block['EMAIL_TO_NAME'])) {
+                $block['EMAIL_TO_NAME'] = $to_name;
+            }
+            if (empty($block['EMAIL_TO_ADDRESS'])) {
+                $block['EMAIL_TO_ADDRESS'] = $to_email_address;
+            }
+            if (empty($block['EMAIL_SUBJECT'])) {
+                $block['EMAIL_SUBJECT'] = $email_subject;
+            }
+            if (empty($block['EMAIL_FROM_NAME'])) {
+                $block['EMAIL_FROM_NAME'] = $from_email_name;
+            }
+            if (empty($block['EMAIL_FROM_ADDRESS'])) {
+                $block['EMAIL_FROM_ADDRESS'] = $from_email_address;
+            }
+
+            $templates = zen_build_html_email_from_blade_template($module, $block);
+            $email_html = $templates['html'];
+            $email_text = $templates['text'];
+
+            if (!is_array($block) && ($block === '' || $block === 'none')) {
+                $email_html = '';
+            }
+
+            $ErrorInfo .= zen_email_workhorse(
+                $to_name,
+                $to_email_address,
+                $email_subject,
+                $email_text,
+                $email_html,
+                $from_email_name,
+                $from_email_address,
+                $module,
+                $attachments
+            );
+
+        } // end foreach loop thru possible multiple email addresses
+
+        $zco_notifier->notify('NOTIFY_EMAIL_AFTER_SEND_ALL_SPECIFIED_ADDRESSES');
+
+        return empty($ErrorInfo) ? '' : nl2br($ErrorInfo);
     }
-  } // end foreach loop thru possible multiple email addresses
-
-  $zco_notifier->notify('NOTIFY_EMAIL_AFTER_SEND_ALL_SPECIFIED_ADDRESSES');
-
-  return isset($ErrorInfo) ? nl2br($ErrorInfo) : '';
-}
 
     /**
      * Send email. This is the central mail function.
@@ -560,6 +228,16 @@ function zen_mail_from_template(string $to_name, string $to_address,
             return false;
         }
 
+        if (zen_is_non_transactional_email($module)) {
+            if (defined('EMAIL_DISCLAIMER') && EMAIL_DISCLAIMER !== '' && !strstr($email_text, sprintf(EMAIL_DISCLAIMER, STORE_OWNER_EMAIL_ADDRESS)) && $to_email_address !== STORE_OWNER_EMAIL_ADDRESS && !defined('EMAIL_DISCLAIMER_NEW_CUSTOMER')) {
+                $email_text .= "\n" . sprintf(EMAIL_DISCLAIMER, STORE_OWNER_EMAIL_ADDRESS);
+            }
+            if (defined('EMAIL_SPAM_DISCLAIMER') && EMAIL_SPAM_DISCLAIMER !== '' && !strstr($email_text, EMAIL_SPAM_DISCLAIMER) && $to_email_address !== STORE_OWNER_EMAIL_ADDRESS) {
+                $email_text .= "\n\n" . EMAIL_SPAM_DISCLAIMER;
+            }
+        }
+
+
         // Parse "from" addresses for "name" <email@address.com> structure, and supply name/address info from it.
         if (preg_match("/ *([^<]*) *<([^>]*)> */i", $from_email_address, $regs)) {
             $from_email_name = trim($regs[1]);
@@ -569,6 +247,8 @@ function zen_mail_from_template(string $to_name, string $to_address,
         if (empty($from_email_name) || $from_email_name === $from_email_address) {
             $from_email_name = STORE_NAME;
         }
+
+        $ErrorInfo = '';
 
         // loop thru multiple email recipients if more than one listed  --- (esp for the admin's "Extra" emails)...
         foreach (explode(',', $to_address) as $key => $value) {
@@ -613,383 +293,402 @@ function zen_mail_from_template(string $to_name, string $to_address,
                 $email_html = '';
             }
 
-            // Build the email based on whether customer has selected HTML or TEXT, and whether we have supplied HTML or TEXT-only components
-            // special handling for XML content
-            if ($email_text === '') {
-                $email_text = str_replace(
-                    [
-                        '<br>',
-                        '<br />',
-                        '</p>',
-                    ],
-                    [
-                        "<br>\n",
-                        "<br>\n",
-                        "</p>\n",
-                    ],
-                    $block['EMAIL_MESSAGE_HTML']
-                );
-                $email_text = ($module !== 'xml_record') ? zen_output_string_protected(stripslashes(strip_tags($email_text))) : $email_text;
-            } elseif ($module !== 'xml_record') {
-                $email_text = preg_replace('~</?([^(strong>|br ?\/?>|a href=|p |span|script|li|ol|ul|em|b>|i>|u>)])~', '@lt@\\1', $email_text);
-                $email_text = strip_tags($email_text);
-                $email_text = str_replace('@lt@', '<', $email_text);
-            }
+            $ErrorInfo .= zen_email_workhorse(
+                $to_name,
+                $to_email_address,
+                $email_subject,
+                $email_text,
+                $email_html,
+                $from_email_name,
+                $from_email_address,
+                $module,
+                $attachments_list
+            );
 
-            if (zen_is_non_transactional_email($module)) {
-                if (defined('EMAIL_DISCLAIMER') && EMAIL_DISCLAIMER !== '' && !strstr($email_text, sprintf(EMAIL_DISCLAIMER, STORE_OWNER_EMAIL_ADDRESS)) && $to_email_address !== STORE_OWNER_EMAIL_ADDRESS && !defined('EMAIL_DISCLAIMER_NEW_CUSTOMER')) {
-                    $email_text .= "\n" . sprintf(EMAIL_DISCLAIMER, STORE_OWNER_EMAIL_ADDRESS);
-                }
-                if (defined('EMAIL_SPAM_DISCLAIMER') && EMAIL_SPAM_DISCLAIMER !== '' && !strstr($email_text, EMAIL_SPAM_DISCLAIMER) && $to_email_address !== STORE_OWNER_EMAIL_ADDRESS) {
-                    $email_text .= "\n\n" . EMAIL_SPAM_DISCLAIMER;
-                }
-            }
-
-            // bof: body of the email clean-up
-            // clean up &amp; and && from email text
-            $email_text = preg_replace('/(&amp;)+/', '&amp;', $email_text);
-            $email_text = preg_replace('/(&amp;)+/', '&', $email_text);
-            $email_text = preg_replace('/&{2,}/', '&', $email_text);
-
-            // clean up currencies for text emails
-            if (defined('CURRENCIES_TRANSLATIONS') && !empty(CURRENCIES_TRANSLATIONS)) {
-                $zen_fix_currencies = preg_split("/[:,]/", str_replace(' ', '', CURRENCIES_TRANSLATIONS));
-                $size = count($zen_fix_currencies);
-                for ($i = 0, $n = $size; $i < $n; $i += 2) {
-                    if (empty($zen_fix_currencies[$i + 1])) {
-                        break;
-                    }
-                    $zen_fix_current = $zen_fix_currencies[$i];
-                    $zen_fix_replace = $zen_fix_currencies[$i + 1];
-                    if (strlen($zen_fix_current) !== 0) {
-                        while (strpos($email_text, $zen_fix_current)) {
-                            $email_text = str_replace($zen_fix_current, $zen_fix_replace, $email_text);
-                        }
-                    }
-                }
-            }
-
-            // fix double quotes
-            $email_text = preg_replace('/(&quot;)+/', '"', $email_text);
-            // fix symbols
-            $email_text = preg_replace('/(&lt;)+/', '<', $email_text);
-            $email_text = preg_replace('/(&gt;)+/', '>', $email_text);
-            // prevent null characters
-            $email_text = preg_replace('/\0+/', ' ', $email_text);
-
-            // fix slashes
-            $text = stripslashes($email_text);
-            $email_html = stripslashes($email_html);
-
-            // eof: body of the email clean-up
-
-            //determine customer's email preference type: HTML or TEXT-ONLY  (HTML assumed if not specified)
-            $sql = "SELECT customers_email_format FROM " . TABLE_CUSTOMERS . " WHERE customers_email_address= :custEmailAddress:";
-            $sql = $db->bindVars($sql, ':custEmailAddress:', $to_email_address, 'string');
-            $result = $db->Execute($sql);
-            $customers_email_format = ($result->RecordCount() > 0) ? $result->fields['customers_email_format'] : '';
-
-            /**
-             * Valid formats:
-             * HTML - if HTML content has been provided/prepared, it will be used. EMAIL_USE_HTML must be set to true in configs
-             * TEXT - a text-only version of the email will be sent, and the HTML version ignored
-             * NONE or OUT - implies opt-out, ie: send no emails, so aborts sending
-             */
-            $zco_notifier->notify('NOTIFY_EMAIL_DETERMINING_EMAIL_FORMAT', $to_email_address, $customers_email_format, $module);
-
-            if ($customers_email_format === 'NONE' || $customers_email_format === 'OUT') {
-                continue;
-            } //if requested no mail, then don't send, but continue processing others.
-
-            // handling admin/"extra"/copy emails:
-            if (ADMIN_EXTRA_EMAIL_FORMAT === 'TEXT' && substr($module, -6) == '_extra') {
-                $email_html = '';  // just blank out the html portion if admin has selected text-only
-            }
-            //determine what format to send messages in if this is an admin email for newsletters:
-            if ($customers_email_format === '' && ADMIN_EXTRA_EMAIL_FORMAT === 'HTML' && in_array($module, ['newsletters', 'product_notification']) && isset($_SESSION['admin_id'])) {
-                $customers_email_format = 'HTML';
-            }
-
-            // special handling for XML content
-            if ($module === 'xml_record') {
-                $email_html = '';
-                $customers_email_format = 'TEXT';
-            }
-
-            //notifier intercept option
-            $zco_notifier->notify('NOTIFY_EMAIL_AFTER_EMAIL_FORMAT_DETERMINED');
-
-            // Create a new mail object with the phpmailer class
-            $mail = new PHPMailer();
-            $mail->XMailer = 'Self-Hosted Zen Cart merchant';
-            $lang_code = strtolower(($_SESSION['languages_code'] === '' ? 'en' : $_SESSION['languages_code']));
-            $mail->SetLanguage($lang_code);
-            $mail->CharSet = (defined('CHARSET')) ? CHARSET : 'iso-8859-1';
-            if (defined('EMAIL_ENCODING_METHOD') && EMAIL_ENCODING_METHOD !== '') {
-                $mail->Encoding = EMAIL_ENCODING_METHOD;
-            }
-            if ((int)EMAIL_SYSTEM_DEBUG > 0) {
-                $mail->SMTPDebug = (int)EMAIL_SYSTEM_DEBUG;
-            }
-            if ((int)EMAIL_SYSTEM_DEBUG > 4) {
-                $mail->Debugoutput = 'error_log';
-            }
-
-            $sending_newsletter = false;
-            $email_transport = EMAIL_TRANSPORT;
-            $email_mailbox = EMAIL_SMTPAUTH_MAILBOX;
-            $email_password = EMAIL_SMTPAUTH_PASSWORD;
-            $email_mail_server = EMAIL_SMTPAUTH_MAIL_SERVER;
-            $email_mail_server_port = (int)EMAIL_SMTPAUTH_MAIL_SERVER_PORT;
-            if (defined('NEWSLETTER_MODULES') && !empty(NEWSLETTER_MODULES) && defined('NEWSLETTER_EMAIL_SMTPAUTH_MAIL_SERVER') && !empty(NEWSLETTER_EMAIL_SMTPAUTH_MAIL_SERVER)) {
-                $modules = explode(',', str_replace(' ', '', NEWSLETTER_MODULES));
-                if (in_array($module, $modules)) {
-                    $sending_newsletter = true;
-                    $email_transport = 'smtpauth';
-                    $email_mailbox = NEWSLETTER_EMAIL_SMTPAUTH_MAILBOX;
-                    $email_password = NEWSLETTER_EMAIL_SMTPAUTH_PASSWORD;
-                    $email_mail_server = NEWSLETTER_EMAIL_SMTPAUTH_MAIL_SERVER;
-                    $email_mail_server_port = (int)NEWSLETTER_EMAIL_SMTPAUTH_MAIL_SERVER_PORT;
-                }
-            }
-
-            switch ($email_transport) {
-                case ('Gmail'):
-                    $mail->isSMTP();
-                    $mail->SMTPAuth = true;
-                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                    $mail->Port = 587;
-                    $mail->Host = 'smtp.gmail.com';
-                    $mail->Username = (!empty(trim($email_mailbox))) ? trim($email_mailbox) : EMAIL_FROM;
-                    if (trim($email_password) !== '') {
-                        $mail->Password = trim($email_password);
-                    }
-                    break;
-                case 'smtpauth':
-                    $mail->isSMTP();
-                    $mail->SMTPAuth = true;
-                    $mail->Username = (!empty(trim($email_mailbox))) ? trim($email_mailbox) : EMAIL_FROM;
-                    if (trim($email_password) !== '') {
-                        $mail->Password = trim($email_password);
-                    }
-                    $mail->Host = (trim($email_mail_server) !== '') ? trim($email_mail_server) : 'localhost';
-                    if ($email_mail_server_port !== 25 && $email_mail_server_port !== 0) {
-                        $mail->Port = $email_mail_server_port;
-                    }
-                    if ($mail->Port < 30 && $mail->Host === 'smtp.gmail.com') {
-                        $mail->Port = 587;
-                    }
-                    //set encryption protocol to allow support for secured email protocols
-                    if ($mail->Port === 465) {
-                        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-                    }
-                    if ($mail->Port === 587) {
-                        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                    }
-
-                    if (!$sending_newsletter) {
-                        if (defined('SMTPAUTH_EMAIL_PROTOCOL') && SMTPAUTH_EMAIL_PROTOCOL !== 'none') {
-                            $mail->SMTPSecure = SMTPAUTH_EMAIL_PROTOCOL;
-                        }
-                    } elseif (defined('NEWSLETTER_SMTPAUTH_EMAIL_PROTOCOL') && NEWSLETTER_SMTPAUTH_EMAIL_PROTOCOL !== 'none') {
-                        $mail->SMTPSecure = NEWSLETTER_SMTPAUTH_EMAIL_PROTOCOL;
-                    }
-                    break;
-                case 'smtp':
-                    $mail->isSMTP();
-                    $mail->Host = trim($email_mail_server);
-                    if ($email_mail_server_port !== 25 && $email_mail_server_port !== 0) {
-                        $mail->Port = $email_mail_server_port;
-                    }
-                    break;
-                case 'PHP':
-                    $mail->isMail();
-                    break;
-                case 'Qmail':
-                    $mail->isQmail();
-                    break;
-                case 'sendmail':
-                case 'sendmail-f':
-                default:
-                    $mail->isSendmail();
-                    if (defined('EMAIL_SENDMAIL_PATH') && file_exists(trim(EMAIL_SENDMAIL_PATH))) {
-                        $mail->Sendmail = trim(EMAIL_SENDMAIL_PATH);
-                    }
-                    break;
-            }
-
-            $mail->Subject = $email_subject;
-
-            if ($email_transport === 'sendmail-f' || EMAIL_SEND_MUST_BE_STORE === 'Yes') {
-                $mail->Sender = EMAIL_FROM;
-            }
-
-            // set the reply-to address.  If none set yet, then use Store's default email name/address.
-            // If sending from checkout or contact-us, use the supplied info
-            $email_reply_to_address = (!empty($email_reply_to_address)) ? $email_reply_to_address : (in_array($module, ['contact_us', 'ask_a_question', 'checkout_extra']) ? $from_email_address : EMAIL_FROM);
-            $email_reply_to_name = (!empty($email_reply_to_name)) ? $email_reply_to_name : (in_array($module, ['contact_us', 'ask_a_question', 'checkout_extra']) ? $from_email_name : STORE_NAME);
-            $mail->addReplyTo($email_reply_to_address, $email_reply_to_name);
-
-            $mail->setFrom($from_email_address, $from_email_name);
-            // if mailserver requires that all outgoing mail must go "from" an email address matching domain on server, set it to store address
-            if (EMAIL_SEND_MUST_BE_STORE === 'Yes') {
-                $mail->From = EMAIL_FROM;
-            }
-
-            $mail->addAddress($to_email_address, $to_name);
-            //$mail->addAddress($to_email_address);    // (alternate format if no name, since name is optional)
-            //$mail->addBCC(STORE_OWNER_EMAIL_ADDRESS, STORE_NAME);
-            //$mail->addCC(email_address);
-
-            if (EMAIL_USE_HTML === 'true') {
-                $email_html = processEmbeddedImages($email_html, $mail);
-            }
-
-            // PROCESS FILE ATTACHMENTS
-            if ($attachments_list === '') {
-                $attachments_list = [];
-            }
-            if (is_string($attachments_list)) {
-                if (file_exists($attachments_list)) {
-                    $attachments_list = [['file' => $attachments_list]];
-                } elseif (file_exists(DIR_FS_CATALOG . $attachments_list)) {
-                    $attachments_list = [['file' => DIR_FS_CATALOG . $attachments_list]];
-                } else {
-                    $attachments_list = [];
-                }
-            }
-            global $newAttachmentsList;
-            $zco_notifier->notify('NOTIFY_EMAIL_BEFORE_PROCESS_ATTACHMENTS', ['attachments' => $attachments_list, 'module' => $module], $mail, $attachments_list);
-            if (isset($newAttachmentsList) && is_array($newAttachmentsList)) {
-                $attachments_list = $newAttachmentsList;
-            }
-            if (defined('EMAIL_ATTACHMENTS_ENABLED') && EMAIL_ATTACHMENTS_ENABLED && is_array($attachments_list) && $attachments_list !== []) {
-                foreach ($attachments_list as $key => $val) {
-                    $fname = $val['name'] ?? null;
-                    $mimeType = (!empty($val['mime_type']) && $val['mime_type'] !== 'application/octet-stream') ? $val['mime_type'] : '';
-                    switch (true) {
-                        case (!empty($val['raw_data'])):
-                            $fdata = $val['raw_data'];
-                            if ($mimeType !== '') {
-                                $mail->addStringAttachment($fdata, $fname, 'base64', $mimeType);
-                            } else {
-                                $mail->addStringAttachment($fdata, $fname);
-                            }
-                            break;
-                        case (isset($val['file']) && file_exists($val['file'])): //'file' portion must contain the full path to the file to be attached
-                            $fdata = $val['file'];
-                            try {
-                                if ($mimeType !== '') {
-                                    $mail->addAttachment($fdata, $fname, 'base64', $mimeType);
-                                } else {
-                                    $mail->addAttachment($fdata, $fname);
-                                }
-                            } catch (\Exception $exception) {
-                                $messageStack->add_session('Error: could not add attachment. ' . $exception->getMessage(), 'error');
-                            }
-                            break;
-                    } // end switch
-                } //end foreach attachments_list
-            } //endif attachments_enabled
-            $zco_notifier->notify('NOTIFY_EMAIL_AFTER_PROCESS_ATTACHMENTS', count($attachments_list));
-
-            // prepare content sections:
-            if (EMAIL_USE_HTML === 'true' && trim($email_html) !== '' &&
-                ($customers_email_format === 'HTML' || (ADMIN_EXTRA_EMAIL_FORMAT !== 'TEXT' && substr($module, -6) == '_extra'))) {
-                // Prepare HTML message
-                $mail->msgHTML($email_html);
-                if ($text !== '') {
-                    // apply the supplied text-only portion instead of the auto-generated portion
-                    $mail->AltBody = $text;
-                }
-            } else {
-                // If we got here, then other rules specified to send a text-only message instead of HTML
-                $mail->Body = $text;
-            }
-
-            // Treat marketing notices as bulk
-            if (in_array($module, ['newsletters', 'product_notification'])) {
-                $mail->addCustomHeader('Precedence: bulk');
-            }
-
-            $mail->addCustomHeader('Auto-Submitted: auto-generated');
-
-            $oldVars = [];
-            $tmpVars = ['REMOTE_ADDR', 'HTTP_X_FORWARDED_FOR', 'PHP_SELF', $mail->Mailer === 'smtp' ? null : 'SERVER_NAME'];
-            foreach ($tmpVars as $key) {
-                if (isset($_SERVER[$key])) {
-                    $oldVars[$key] = $_SERVER[$key];
-                    $_SERVER[$key] = '';
-                }
-                if ($key === 'REMOTE_ADDR') {
-                    $_SERVER[$key] = HTTP_SERVER;
-                } elseif ($key === 'PHP_SELF') {
-                    $_SERVER[$key] = '/obf' . 'us' . 'cated';
-                }
-            }
-            ini_set('mail.add_x_header', 0);
-
-            $ErrorInfo = '';
-
-            // set Hostname, since it can aid in delivery of emails.
-            $defaultHostname = preg_replace('~(^https?://|\/.*$)~', '', defined('HTTP_CATALOG_SERVER') ? HTTP_CATALOG_SERVER : HTTP_SERVER);
-            // If emails are being rejected, comment out the following line and try again:
-            $mail->Hostname = defined('EMAIL_HOSTNAME') ? EMAIL_HOSTNAME : $defaultHostname;
-
-            $zco_notifier->notify('NOTIFY_EMAIL_READY_TO_SEND', [$mail], $mail);
-            /**
-             * Send the email. If an error occurs, trap it and display it in the messageStack
-             */
-            $success = false;
-            try {
-                $success = $mail->send();
-            } catch (Exception $e) {
-            }
-            if (!$success) {
-                $msg = sprintf(EMAIL_SEND_FAILED, $to_name, $to_email_address, $email_subject) . '&nbsp;' . $mail->ErrorInfo;
-                if ($messageStack !== null) {
-                    if (IS_ADMIN_FLAG === true) {
-                        $messageStack->add_session($msg, 'error');
-                    } else {
-                        $messageStack->add('header', $msg, 'error');
-                    }
-                } else {
-                    error_log($msg);
-                }
-                $ErrorInfo .= ($mail->ErrorInfo !== '') ? $mail->ErrorInfo . "\n" : '';
-            }
-            $zco_notifier->notify('NOTIFY_EMAIL_AFTER_SEND');
-            foreach ($oldVars as $key => $val) {
-                $_SERVER[$key] = $val;
-            }
-
-            $zco_notifier->notify('NOTIFY_EMAIL_AFTER_SEND_WITH_ALL_PARAMS', [$to_name, $to_email_address, $from_email_name, $from_email_address, $email_subject, $email_html, $text, $module, $ErrorInfo]);
-            // Archive this message to storage log
-            // don't archive pwd-resets and CC numbers
-            if (EMAIL_ARCHIVE === 'true' && $module !== 'password_forgotten_admin' && $module !== 'cc_middle_digs' && $module !== 'no_archive') {
-                zen_mail_archive_write($to_name, $to_email_address, $from_email_name, $from_email_address, $email_subject, $email_html, $text, $module, $ErrorInfo);
-            } // endif archiving
-
-            // -----
-            // If a mail-related error (reported by PHPMailer) occurred, treat the 'recipients_failed' message as a special
-            // case, logging to a differently-named log file to make finding these issues easier.  Otherwise, log a PHP notice.
-            //
-            if ($ErrorInfo !== '') {
-                $mail_langs = $mail->getTranslations();
-                if (strpos($ErrorInfo, $mail_langs['recipients_failed']) === false) {
-                    trigger_error('Email Error: ' . $ErrorInfo);
-                } else {
-                    $log_prefix = (IS_ADMIN_FLAG === true) ? '/myDEBUG-bounced-email-adm-' : '/myDEBUG-bounced-email-';
-                    $log_date = new DateTime();
-                    error_log('Request URI: ' . $_SERVER['REQUEST_URI'] . PHP_EOL . PHP_EOL . $ErrorInfo, 3, DIR_FS_LOGS . $log_prefix . $log_date->format('Ymd-His-u') . '.log');
-                }
-            }
         } // end foreach loop thru possible multiple email addresses
 
         $zco_notifier->notify('NOTIFY_EMAIL_AFTER_SEND_ALL_SPECIFIED_ADDRESSES');
 
-        return isset($ErrorInfo) ? nl2br($ErrorInfo) : '';
+        return empty($ErrorInfo) ? '' : nl2br($ErrorInfo);
     }  // end function
+
+    function zen_email_workhorse(
+        string $to_name,
+        string $to_email_address,
+        string $email_subject,
+        string $email_text,
+        string $email_html,
+        string $from_email_name,
+        string $from_email_address,
+        string $module,
+        $attachments_list
+    ): string {
+        global $db, $zco_notifier;
+
+        // Build the email based on whether customer has selected HTML or TEXT, and whether we have supplied HTML or TEXT-only components
+        // special handling for XML content
+        if ($email_text === '') {
+            $email_text = str_replace(
+                [
+                    '<br>',
+                    '<br />',
+                    '</p>',
+                ],
+                [
+                    "<br>\n",
+                    "<br>\n",
+                    "</p>\n",
+                ],
+                $block['EMAIL_MESSAGE_HTML']
+            );
+            $email_text = ($module !== 'xml_record') ? zen_output_string_protected(stripslashes(strip_tags($email_text))) : $email_text;
+        } elseif ($module !== 'xml_record') {
+            $email_text = preg_replace('~</?([^(strong>|br ?\/?>|a href=|p |span|script|li|ol|ul|em|b>|i>|u>)])~', '@lt@\\1', $email_text);
+            $email_text = strip_tags($email_text);
+            $email_text = str_replace('@lt@', '<', $email_text);
+        }
+
+        // bof: body of the email clean-up
+        // clean up &amp; and && from email text
+        $email_text = preg_replace('/(&amp;)+/', '&amp;', $email_text);
+        $email_text = preg_replace('/(&amp;)+/', '&', $email_text);
+        $email_text = preg_replace('/&{2,}/', '&', $email_text);
+
+        // clean up currencies for text emails
+        if (defined('CURRENCIES_TRANSLATIONS') && !empty(CURRENCIES_TRANSLATIONS)) {
+            $zen_fix_currencies = preg_split("/[:,]/", str_replace(' ', '', CURRENCIES_TRANSLATIONS));
+            $size = count($zen_fix_currencies);
+            for ($i = 0, $n = $size; $i < $n; $i += 2) {
+                if (empty($zen_fix_currencies[$i + 1])) {
+                    break;
+                }
+                $zen_fix_current = $zen_fix_currencies[$i];
+                $zen_fix_replace = $zen_fix_currencies[$i + 1];
+                if (strlen($zen_fix_current) !== 0) {
+                    while (strpos($email_text, $zen_fix_current)) {
+                        $email_text = str_replace($zen_fix_current, $zen_fix_replace, $email_text);
+                    }
+                }
+            }
+        }
+
+        // fix double quotes
+        $email_text = preg_replace('/(&quot;)+/', '"', $email_text);
+        // fix symbols
+        $email_text = preg_replace('/(&lt;)+/', '<', $email_text);
+        $email_text = preg_replace('/(&gt;)+/', '>', $email_text);
+        // prevent null characters
+        $email_text = preg_replace('/\0+/', ' ', $email_text);
+
+        // fix slashes
+        $text = stripslashes($email_text);
+        $email_html = stripslashes($email_html);
+
+        // eof: body of the email clean-up
+
+        //determine customer's email preference type: HTML or TEXT-ONLY  (HTML assumed if not specified)
+        $sql = "SELECT customers_email_format FROM " . TABLE_CUSTOMERS . " WHERE customers_email_address= :custEmailAddress:";
+        $sql = $db->bindVars($sql, ':custEmailAddress:', $to_email_address, 'string');
+        $result = $db->Execute($sql);
+        $customers_email_format = ($result->RecordCount() > 0) ? $result->fields['customers_email_format'] : '';
+
+        /**
+         * Valid formats:
+         * HTML - if HTML content has been provided/prepared, it will be used. EMAIL_USE_HTML must be set to true in configs
+         * TEXT - a text-only version of the email will be sent, and the HTML version ignored
+         * NONE or OUT - implies opt-out, ie: send no emails, so aborts sending
+         */
+        $zco_notifier->notify('NOTIFY_EMAIL_DETERMINING_EMAIL_FORMAT', $to_email_address, $customers_email_format, $module);
+
+        if ($customers_email_format === 'NONE' || $customers_email_format === 'OUT') {
+            return '';
+        } //if requested no mail, then don't send, but continue processing others.
+
+        // handling admin/"extra"/copy emails:
+        if (ADMIN_EXTRA_EMAIL_FORMAT === 'TEXT' && substr($module, -6) == '_extra') {
+            $email_html = '';  // just blank out the html portion if admin has selected text-only
+        }
+        //determine what format to send messages in if this is an admin email for newsletters:
+        if ($customers_email_format === '' && ADMIN_EXTRA_EMAIL_FORMAT === 'HTML' && in_array($module, ['newsletters', 'product_notification']) && isset($_SESSION['admin_id'])) {
+            $customers_email_format = 'HTML';
+        }
+
+        // special handling for XML content
+        if ($module === 'xml_record') {
+            $email_html = '';
+            $customers_email_format = 'TEXT';
+        }
+
+        //notifier intercept option
+        $zco_notifier->notify('NOTIFY_EMAIL_AFTER_EMAIL_FORMAT_DETERMINED');
+
+        // Create a new mail object with the phpmailer class
+        $mail = new PHPMailer();
+        $mail->XMailer = 'Self-Hosted Zen Cart merchant';
+        $lang_code = strtolower(($_SESSION['languages_code'] === '' ? 'en' : $_SESSION['languages_code']));
+        $mail->SetLanguage($lang_code);
+        $mail->CharSet = (defined('CHARSET')) ? CHARSET : 'iso-8859-1';
+        if (defined('EMAIL_ENCODING_METHOD') && EMAIL_ENCODING_METHOD !== '') {
+            $mail->Encoding = EMAIL_ENCODING_METHOD;
+        }
+        if ((int)EMAIL_SYSTEM_DEBUG > 0) {
+            $mail->SMTPDebug = (int)EMAIL_SYSTEM_DEBUG;
+        }
+        if ((int)EMAIL_SYSTEM_DEBUG > 4) {
+            $mail->Debugoutput = 'error_log';
+        }
+
+        $sending_newsletter = false;
+        $email_transport = EMAIL_TRANSPORT;
+        $email_mailbox = EMAIL_SMTPAUTH_MAILBOX;
+        $email_password = EMAIL_SMTPAUTH_PASSWORD;
+        $email_mail_server = EMAIL_SMTPAUTH_MAIL_SERVER;
+        $email_mail_server_port = (int)EMAIL_SMTPAUTH_MAIL_SERVER_PORT;
+        if (defined('NEWSLETTER_MODULES') && !empty(NEWSLETTER_MODULES) && defined('NEWSLETTER_EMAIL_SMTPAUTH_MAIL_SERVER') && !empty(NEWSLETTER_EMAIL_SMTPAUTH_MAIL_SERVER)) {
+            $modules = explode(',', str_replace(' ', '', NEWSLETTER_MODULES));
+            if (in_array($module, $modules)) {
+                $sending_newsletter = true;
+                $email_transport = 'smtpauth';
+                $email_mailbox = NEWSLETTER_EMAIL_SMTPAUTH_MAILBOX;
+                $email_password = NEWSLETTER_EMAIL_SMTPAUTH_PASSWORD;
+                $email_mail_server = NEWSLETTER_EMAIL_SMTPAUTH_MAIL_SERVER;
+                $email_mail_server_port = (int)NEWSLETTER_EMAIL_SMTPAUTH_MAIL_SERVER_PORT;
+            }
+        }
+
+        switch ($email_transport) {
+            case ('Gmail'):
+                $mail->isSMTP();
+                $mail->SMTPAuth = true;
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+                $mail->Port = 587;
+                $mail->Host = 'smtp.gmail.com';
+                $mail->Username = (!empty(trim($email_mailbox))) ? trim($email_mailbox) : EMAIL_FROM;
+                if (trim($email_password) !== '') {
+                    $mail->Password = trim($email_password);
+                }
+                break;
+            case 'smtpauth':
+                $mail->isSMTP();
+                $mail->SMTPAuth = true;
+                $mail->Username = (!empty(trim($email_mailbox))) ? trim($email_mailbox) : EMAIL_FROM;
+                if (trim($email_password) !== '') {
+                    $mail->Password = trim($email_password);
+                }
+                $mail->Host = (trim($email_mail_server) !== '') ? trim($email_mail_server) : 'localhost';
+                if ($email_mail_server_port !== 25 && $email_mail_server_port !== 0) {
+                    $mail->Port = $email_mail_server_port;
+                }
+                if ($mail->Port < 30 && $mail->Host === 'smtp.gmail.com') {
+                    $mail->Port = 587;
+                }
+                //set encryption protocol to allow support for secured email protocols
+                if ($mail->Port === 465) {
+                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+                }
+                if ($mail->Port === 587) {
+                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+                }
+
+                if (!$sending_newsletter) {
+                    if (defined('SMTPAUTH_EMAIL_PROTOCOL') && SMTPAUTH_EMAIL_PROTOCOL !== 'none') {
+                        $mail->SMTPSecure = SMTPAUTH_EMAIL_PROTOCOL;
+                    }
+                } elseif (defined('NEWSLETTER_SMTPAUTH_EMAIL_PROTOCOL') && NEWSLETTER_SMTPAUTH_EMAIL_PROTOCOL !== 'none') {
+                    $mail->SMTPSecure = NEWSLETTER_SMTPAUTH_EMAIL_PROTOCOL;
+                }
+                break;
+            case 'smtp':
+                $mail->isSMTP();
+                $mail->Host = trim($email_mail_server);
+                if ($email_mail_server_port !== 25 && $email_mail_server_port !== 0) {
+                    $mail->Port = $email_mail_server_port;
+                }
+                break;
+            case 'PHP':
+                $mail->isMail();
+                break;
+            case 'Qmail':
+                $mail->isQmail();
+                break;
+            case 'sendmail':
+            case 'sendmail-f':
+            default:
+                $mail->isSendmail();
+                if (defined('EMAIL_SENDMAIL_PATH') && file_exists(trim(EMAIL_SENDMAIL_PATH))) {
+                    $mail->Sendmail = trim(EMAIL_SENDMAIL_PATH);
+                }
+                break;
+        }
+
+        $mail->Subject = $email_subject;
+
+        if ($email_transport === 'sendmail-f' || EMAIL_SEND_MUST_BE_STORE === 'Yes') {
+            $mail->Sender = EMAIL_FROM;
+        }
+
+        // set the reply-to address.  If none set yet, then use Store's default email name/address.
+        // If sending from checkout or contact-us, use the supplied info
+        $email_reply_to_address = (!empty($email_reply_to_address)) ? $email_reply_to_address : (in_array($module, ['contact_us', 'ask_a_question', 'checkout_extra']) ? $from_email_address : EMAIL_FROM);
+        $email_reply_to_name = (!empty($email_reply_to_name)) ? $email_reply_to_name : (in_array($module, ['contact_us', 'ask_a_question', 'checkout_extra']) ? $from_email_name : STORE_NAME);
+        $mail->addReplyTo($email_reply_to_address, $email_reply_to_name);
+
+        $mail->setFrom($from_email_address, $from_email_name);
+        // if mailserver requires that all outgoing mail must go "from" an email address matching domain on server, set it to store address
+        if (EMAIL_SEND_MUST_BE_STORE === 'Yes') {
+            $mail->From = EMAIL_FROM;
+        }
+
+        $mail->addAddress($to_email_address, $to_name);
+        //$mail->addAddress($to_email_address);    // (alternate format if no name, since name is optional)
+        //$mail->addBCC(STORE_OWNER_EMAIL_ADDRESS, STORE_NAME);
+        //$mail->addCC(email_address);
+
+        if (EMAIL_USE_HTML === 'true') {
+            $email_html = processEmbeddedImages($email_html, $mail);
+        }
+
+        // PROCESS FILE ATTACHMENTS
+        if ($attachments_list === '') {
+            $attachments_list = [];
+        }
+        if (is_string($attachments_list)) {
+            if (file_exists($attachments_list)) {
+                $attachments_list = [['file' => $attachments_list]];
+            } elseif (file_exists(DIR_FS_CATALOG . $attachments_list)) {
+                $attachments_list = [['file' => DIR_FS_CATALOG . $attachments_list]];
+            } else {
+                $attachments_list = [];
+            }
+        }
+        global $newAttachmentsList;
+        $zco_notifier->notify('NOTIFY_EMAIL_BEFORE_PROCESS_ATTACHMENTS', ['attachments' => $attachments_list, 'module' => $module], $mail, $attachments_list);
+        if (isset($newAttachmentsList) && is_array($newAttachmentsList)) {
+            $attachments_list = $newAttachmentsList;
+        }
+        if (defined('EMAIL_ATTACHMENTS_ENABLED') && EMAIL_ATTACHMENTS_ENABLED && is_array($attachments_list) && $attachments_list !== []) {
+            foreach ($attachments_list as $key => $val) {
+                $fname = $val['name'] ?? null;
+                $mimeType = (!empty($val['mime_type']) && $val['mime_type'] !== 'application/octet-stream') ? $val['mime_type'] : '';
+                switch (true) {
+                    case (!empty($val['raw_data'])):
+                        $fdata = $val['raw_data'];
+                        if ($mimeType !== '') {
+                            $mail->addStringAttachment($fdata, $fname, 'base64', $mimeType);
+                        } else {
+                            $mail->addStringAttachment($fdata, $fname);
+                        }
+                        break;
+                    case (isset($val['file']) && file_exists($val['file'])): //'file' portion must contain the full path to the file to be attached
+                        $fdata = $val['file'];
+                        try {
+                            if ($mimeType !== '') {
+                                $mail->addAttachment($fdata, $fname, 'base64', $mimeType);
+                            } else {
+                                $mail->addAttachment($fdata, $fname);
+                            }
+                        } catch (\Exception $exception) {
+                            $messageStack->add_session('Error: could not add attachment. ' . $exception->getMessage(), 'error');
+                        }
+                        break;
+                } // end switch
+            } //end foreach attachments_list
+        } //endif attachments_enabled
+        $zco_notifier->notify('NOTIFY_EMAIL_AFTER_PROCESS_ATTACHMENTS', count($attachments_list));
+
+        // prepare content sections:
+        if (EMAIL_USE_HTML === 'true' && trim($email_html) !== '' &&
+            ($customers_email_format === 'HTML' || (ADMIN_EXTRA_EMAIL_FORMAT !== 'TEXT' && substr($module, -6) == '_extra'))) {
+            // Prepare HTML message
+            $mail->msgHTML($email_html);
+            if ($text !== '') {
+                // apply the supplied text-only portion instead of the auto-generated portion
+                $mail->AltBody = $text;
+            }
+        } else {
+            // If we got here, then other rules specified to send a text-only message instead of HTML
+            $mail->Body = $text;
+        }
+
+        // Treat marketing notices as bulk
+        if (in_array($module, ['newsletters', 'product_notification'])) {
+            $mail->addCustomHeader('Precedence: bulk');
+        }
+
+        $mail->addCustomHeader('Auto-Submitted: auto-generated');
+
+        $oldVars = [];
+        $tmpVars = ['REMOTE_ADDR', 'HTTP_X_FORWARDED_FOR', 'PHP_SELF', $mail->Mailer === 'smtp' ? null : 'SERVER_NAME'];
+        foreach ($tmpVars as $key) {
+            if (isset($_SERVER[$key])) {
+                $oldVars[$key] = $_SERVER[$key];
+                $_SERVER[$key] = '';
+            }
+            if ($key === 'REMOTE_ADDR') {
+                $_SERVER[$key] = HTTP_SERVER;
+            } elseif ($key === 'PHP_SELF') {
+                $_SERVER[$key] = '/obf' . 'us' . 'cated';
+            }
+        }
+        ini_set('mail.add_x_header', 0);
+
+        $ErrorInfo = '';
+
+        // set Hostname, since it can aid in delivery of emails.
+        $defaultHostname = preg_replace('~(^https?://|\/.*$)~', '', defined('HTTP_CATALOG_SERVER') ? HTTP_CATALOG_SERVER : HTTP_SERVER);
+        // If emails are being rejected, comment out the following line and try again:
+        $mail->Hostname = defined('EMAIL_HOSTNAME') ? EMAIL_HOSTNAME : $defaultHostname;
+
+        $zco_notifier->notify('NOTIFY_EMAIL_READY_TO_SEND', [$mail], $mail);
+        /**
+         * Send the email. If an error occurs, trap it and display it in the messageStack
+         */
+        $success = false;
+        try {
+            $success = $mail->send();
+        } catch (Exception $e) {
+        }
+        if (!$success) {
+            $msg = sprintf(EMAIL_SEND_FAILED, $to_name, $to_email_address, $email_subject) . '&nbsp;' . $mail->ErrorInfo;
+            if ($messageStack !== null) {
+                if (IS_ADMIN_FLAG === true) {
+                    $messageStack->add_session($msg, 'error');
+                } else {
+                    $messageStack->add('header', $msg, 'error');
+                }
+            } else {
+                error_log($msg);
+            }
+            $ErrorInfo .= ($mail->ErrorInfo !== '') ? $mail->ErrorInfo . "\n" : '';
+        }
+        $zco_notifier->notify('NOTIFY_EMAIL_AFTER_SEND');
+        foreach ($oldVars as $key => $val) {
+            $_SERVER[$key] = $val;
+        }
+
+        $zco_notifier->notify('NOTIFY_EMAIL_AFTER_SEND_WITH_ALL_PARAMS', [$to_name, $to_email_address, $from_email_name, $from_email_address, $email_subject, $email_html, $text, $module, $ErrorInfo]);
+        // Archive this message to storage log
+        // don't archive pwd-resets and CC numbers
+        if (EMAIL_ARCHIVE === 'true' && $module !== 'password_forgotten_admin' && $module !== 'cc_middle_digs' && $module !== 'no_archive') {
+            zen_mail_archive_write($to_name, $to_email_address, $from_email_name, $from_email_address, $email_subject, $email_html, $text, $module, $ErrorInfo);
+        } // endif archiving
+
+        // -----
+        // If a mail-related error (reported by PHPMailer) occurred, treat the 'recipients_failed' message as a special
+        // case, logging to a differently-named log file to make finding these issues easier.  Otherwise, log a PHP notice.
+        //
+        if ($ErrorInfo !== '') {
+            $mail_langs = $mail->getTranslations();
+            if (strpos($ErrorInfo, $mail_langs['recipients_failed']) === false) {
+                trigger_error('Email Error: ' . $ErrorInfo);
+            } else {
+                $log_prefix = (IS_ADMIN_FLAG === true) ? '/myDEBUG-bounced-email-adm-' : '/myDEBUG-bounced-email-';
+                $log_date = new DateTime();
+                error_log('Request URI: ' . $_SERVER['REQUEST_URI'] . PHP_EOL . PHP_EOL . $ErrorInfo, 3, DIR_FS_LOGS . $log_prefix . $log_date->format('Ymd-His-u') . '.log');
+            }
+        }
+        return $ErrorInfo;
+    }
 
     /**
      * zen_mail_archive_write()
@@ -1096,25 +795,7 @@ function zen_mail_from_template(string $to_name, string $to_address,
             trigger_error('Missing common email CSS file: ' . DIR_FS_EMAIL_TEMPLATES . 'email_common.css', E_USER_WARNING);
         }
 
-        // Handle logo image
-        if (empty($block['EMAIL_LOGO_FILE'])) {
-            $domain = (IS_ADMIN_FLAG === true) ? HTTP_CATALOG_SERVER : HTTP_SERVER;
-            $block['EMAIL_LOGO_FILE'] = $domain . DIR_WS_CATALOG . 'email/' . EMAIL_LOGO_FILENAME;
-        }
-        if (empty($block['EMAIL_LOGO_ALT_TEXT'])) {
-            $block['EMAIL_LOGO_ALT_TEXT'] = EMAIL_LOGO_ALT_TITLE_TEXT;
-        }
-        if (empty($block['EMAIL_LOGO_WIDTH'])) {
-            $block['EMAIL_LOGO_WIDTH'] = EMAIL_LOGO_WIDTH;
-        }
-        if (empty($block['EMAIL_LOGO_HEIGHT'])) {
-            $block['EMAIL_LOGO_HEIGHT'] = EMAIL_LOGO_HEIGHT;
-        }
-
-        zen_define_default('EMAIL_EXTRA_HEADER_INFO', '');
-        if (empty($block['EXTRA_HEADER_INFO'])) {
-            $block['EXTRA_HEADER_INFO'] = EMAIL_EXTRA_HEADER_INFO;
-        }
+        email_add_common_data($block);
 
         // Obtain the template file to be used
         $template_filename_base = DIR_FS_EMAIL_TEMPLATES . $langfolder . 'email_template_';
@@ -1162,42 +843,6 @@ function zen_mail_from_template(string $to_name, string $to_address,
             $file_holder = preg_replace('/<div class="extra-info">\s?\$EXTRA_INFO\s?<\/div>/', '', $file_holder);
         }
 
-        if (!defined('HTTP_CATALOG_SERVER')) {
-            define('HTTP_CATALOG_SERVER', HTTP_SERVER);
-        }
-        //check for some specifics that need to be included with all messages
-        if (empty($block['EMAIL_STORE_NAME'])) {
-            $block['EMAIL_STORE_NAME'] = STORE_NAME;
-        }
-        if (empty($block['EMAIL_STORE_URL'])) {
-            $block['EMAIL_STORE_URL'] = '<a href="' . HTTP_CATALOG_SERVER . DIR_WS_CATALOG . '">' . STORE_NAME . '</a>';
-        }
-        if (empty($block['EMAIL_STORE_OWNER'])) {
-            $block['EMAIL_STORE_OWNER'] = STORE_OWNER;
-        }
-        if (empty($block['EMAIL_FOOTER_COPYRIGHT']) ) {
-            $block['EMAIL_FOOTER_COPYRIGHT'] = EMAIL_FOOTER_COPYRIGHT;
-        }
-        if (empty($block['EMAIL_DISCLAIMER'])) {
-            $block['EMAIL_DISCLAIMER'] = sprintf(EMAIL_DISCLAIMER, '<a href="mailto:' . STORE_OWNER_EMAIL_ADDRESS . '">' . STORE_OWNER_EMAIL_ADDRESS . '</a>');
-        }
-        if (empty($block['EMAIL_SPAM_DISCLAIMER'])) {
-            $block['EMAIL_SPAM_DISCLAIMER'] = EMAIL_SPAM_DISCLAIMER;
-        }
-        if (empty($block['EMAIL_DATE_SHORT'])) {
-            $block['EMAIL_DATE_SHORT'] = zen_date_short(date('Y-m-d H:i:s'));
-        }
-        if (empty($block['EMAIL_DATE_LONG'])) {
-            $block['EMAIL_DATE_LONG'] = zen_date_long(date('Y-m-d H:i:s'));
-        }
-        if (empty($block['BASE_HREF'])) {
-            $block['BASE_HREF'] = HTTP_CATALOG_SERVER . DIR_WS_CATALOG;
-        }
-        if (empty($block['CHARSET'])) {
-            $block['CHARSET'] = CHARSET;
-        }
-        //  if (!isset($block['EMAIL_STYLESHEET']) || $block['EMAIL_STYLESHEET'] == '')      $block['EMAIL_STYLESHEET']       = str_replace(array("\r\n", "\n", "\r"), "",@file_get_contents(DIR_FS_EMAIL_TEMPLATES.'stylesheet.css'));
-
         if (!isset($block['EXTRA_INFO'])) {
             $block['EXTRA_INFO'] = '';
         }
@@ -1241,152 +886,192 @@ function zen_mail_from_template(string $to_name, string $to_address,
         return $file_holder;
     }
 
-  function zen_build_html_email_from_blade_template(string $module, array $block) {
-    global $messageStack, $current_page_base;
-    if (NULL == $current_page_base) $current_page_base = $module;
-
-    // If we were given an HTML email body instead of data model, return it.
-    if (!is_array($block) && substr($block, 0, 6) == '<html>') {
-      return [
-        'html' => $block,
-        'text' => strip_tags($block)
-      ];
-    }
-
-    // Identify and Read the template file for the type of message being sent
-    $langfolder = (strtolower($_SESSION['languages_code']) == 'en') ? '' : strtolower($_SESSION['languages_code']) . '/';
-
-    // Handle CSS
-    $block['EMAIL_COMMON_CSS'] = '';
-    $filesToTest = array(
-        DIR_FS_EMAIL_TEMPLATES . $langfolder . 'email_common.css',
-        DIR_FS_EMAIL_TEMPLATES . 'email_common.css'
-    );
-    $found = false;
-    foreach($filesToTest as $val) {
-        if (file_exists($val)) {
-            $block['EMAIL_COMMON_CSS'] = file_get_contents ($val);
-            $found = true;
-            break;
+    function zen_build_html_email_from_blade_template(
+        string $module,
+        array $block
+    ) {
+        global $messageStack, $current_page_base;
+        if (null == $current_page_base) {
+            $current_page_base = $module;
         }
+
+        // If we were given an HTML email body instead of data model, return it.
+        if (!is_array($block) && substr($block, 0, 6) == '<html>') {
+        return [
+            'html' => $block,
+            'text' => strip_tags($block)
+        ];
+        }
+
+        // Identify and Read the template file for the type of message being sent
+        $langfolder = (strtolower($_SESSION['languages_code']) == 'en') ? '' : strtolower($_SESSION['languages_code']) . '/';
+
+        // Handle CSS
+        $block['EMAIL_COMMON_CSS'] = '';
+        $filesToTest = array(
+            DIR_FS_EMAIL_TEMPLATES . $langfolder . 'email_common.css',
+            DIR_FS_EMAIL_TEMPLATES . 'email_common.css'
+        );
+        $found = false;
+        foreach($filesToTest as $val) {
+            if (file_exists($val)) {
+                $block['EMAIL_COMMON_CSS'] = file_get_contents($val);
+                $found = true;
+                break;
+            }
+        }
+        if (false === $found) {
+            trigger_error('Missing common email CSS file: ' . DIR_FS_EMAIL_TEMPLATES . 'email_common.css', E_USER_WARNING);
+        }
+
+        email_add_common_data($block);
+
+        $block['MODULE_NAME'] = $module;
+
+        if (!empty($block['EXTRA_INFO']) && $module != 'contact_us' && $module != 'ask_a_question') {
+            $block['EXTRA_INFO']  = '';
+        }
+
+        //prepare the "unsubscribe" link:
+        if (IS_ADMIN_FLAG === true) { // is this admin version, or catalog?
+            $block['UNSUBSCRIBE_LINK'] = str_replace("\n", '', TEXT_UNSUBSCRIBE) . ' <a href="' . zen_catalog_href_link(FILENAME_UNSUBSCRIBE, "addr=" . $block['EMAIL_TO_ADDRESS']) . '">' . zen_catalog_href_link(FILENAME_UNSUBSCRIBE, "addr=" . $block['EMAIL_TO_ADDRESS']) . '</a>';
+        } else {
+            $block['UNSUBSCRIBE_LINK'] = str_replace("\n", '', TEXT_UNSUBSCRIBE) . ' <a href="' . zen_href_link(FILENAME_UNSUBSCRIBE, "addr=" . $block['EMAIL_TO_ADDRESS']) . '">' . zen_href_link(FILENAME_UNSUBSCRIBE, "addr=" . $block['EMAIL_TO_ADDRESS']) . '</a>';
+        }
+
+        // Obtain the template file to be used
+        $template_filename_base = DIR_FS_EMAIL_TEMPLATES . $langfolder . "email_template_";
+        $template_filename_base_en = DIR_FS_EMAIL_TEMPLATES . "email_template_";
+        $template_filename = DIR_FS_EMAIL_TEMPLATES . $langfolder . "email_template_" . $current_page_base . ".blade.php"; //".html";
+
+        $filesToTest = [
+            $template_filename_base . str_replace(array('_admin'), '', $module) . '.blade.php',
+            $template_filename_base_en . str_replace(array('_admin'), '', $module) . '.blade.php',
+            DIR_FS_EMAIL_TEMPLATES . $langfolder . "email_template_" . $current_page_base . ".blade.php",
+            DIR_FS_EMAIL_TEMPLATES . "email_template_" . $current_page_base . ".blade.php",
+            (isset($block['EMAIL_TEMPLATE_FILENAME']) && $block['EMAIL_TEMPLATE_FILENAME'] !== '') ? "{$block['EMAIL_TEMPLATE_FILENAME']}.blade.php" : null,
+            $template_filename_base . 'default' . '.blade.php',
+            $template_filename_base_en . 'default' . '.blade.php',
+        ];
+        $html_template_filename = '';
+        $text_template_filename = '';
+        foreach($filesToTest as $val) {
+            if (empty($val)) {
+                continue;
+            }
+            if (!$html_template_filename && file_exists($val)) {
+                $html_template_filename = $val;
+            }
+            // Note: Cannot use '.' in filename, Blade replaces with '/', so use '_' instead.
+            $try_txt_filename = str_replace('.blade.php', '_text.blade.php', $html_template_filename);
+            if (!$text_template_filename && file_exists($try_txt_filename)) {
+                $text_template_filename = $try_txt_filename;
+            }
+        }
+        if (!$html_template_filename) {
+            if(isset($messageStack)) {
+                $messageStack->add('header', "ERROR: The email template file for ($template_filename_base) or ($template_filename) cannot be found.", 'caution');
+                return ''; // couldn't find template file, so return an empty string for html message.
+            }
+        }
+
+        // Use Laravel Blade engine to render the email templates as if they were views.
+        $path_info = pathinfo($html_template_filename);
+        $cache = DIR_FS_SQL_CACHE;
+
+        $blade = new Blade($path_info['dirname'], $cache);
+
+        // filenames need to have the path and suffix stripped so the Blade engine can find them
+        // $html_template_filename = str_replace(DIR_FS_EMAIL_TEMPLATES, '', $html_template_filename);
+        $html_template_filename = str_replace('.blade.php', '', $path_info['basename']);
+        // try {
+        $html_output = $blade->view()->make($html_template_filename, $block)->render();
+        // } catch (ParseError $ex) {
+        //   throw new Exception("There was a problem parsing your HTML template for $module! {$ex->getMessage()}", 0, $ex);
+        // }
+
+        // If we found a specific text template, use that, otherwise strip the rendered HTML
+        if ($text_template_filename) {
+            $text_template_filename = str_replace(DIR_FS_EMAIL_TEMPLATES, '', $text_template_filename);
+            $text_template_filename = str_replace('.blade.php', '', $text_template_filename);
+            $text_output = $blade->view()->make($text_template_filename, $block)->render();
+        } else {
+        // This is likely to produce a poor result
+            $text_output = strip_tags($html_output);
+            $text_output = html_entity_decode($html_output); // Recover e.g. &#039; back to '
+        }
+
+        //DEBUG -- to display preview on-screen
+        if (EMAIL_SYSTEM_DEBUG === 'preview') {
+            echo $html_output;
+        }
+
+        return [
+            'html' => $html_output,
+            'text' => $text_output
+        ];
     }
-    if (false === $found) {
-        trigger_error('Missing common email CSS file: ' . DIR_FS_EMAIL_TEMPLATES . 'email_common.css', E_USER_WARNING);
-    }
 
-    // Handle logo image
-    if (empty($block['EMAIL_LOGO_FILE'])) {
-        $domain = (IS_ADMIN_FLAG === true) ? HTTP_CATALOG_SERVER : HTTP_SERVER;
-        $block['EMAIL_LOGO_FILE'] = $domain . DIR_WS_CATALOG . 'email/' . EMAIL_LOGO_FILENAME;
-    }
-    if (!isset ($block['EMAIL_LOGO_ALT_TEXT']) || $block['EMAIL_LOGO_ALT_TEXT'] == '') $block['EMAIL_LOGO_ALT_TEXT'] = EMAIL_LOGO_ALT_TITLE_TEXT;
-    if (!isset ($block['EMAIL_LOGO_WIDTH']) || $block['EMAIL_LOGO_WIDTH'] == '') $block['EMAIL_LOGO_WIDTH'] = EMAIL_LOGO_WIDTH;
-    if (!isset ($block['EMAIL_LOGO_HEIGHT']) || $block['EMAIL_LOGO_HEIGHT'] == '') $block['EMAIL_LOGO_HEIGHT'] = EMAIL_LOGO_HEIGHT;
+    function email_add_common_data(
+        array &$block
+    ) {
+        // Handle logo image
+        if (empty($block['EMAIL_LOGO_FILE'])) {
+            $domain = (IS_ADMIN_FLAG === true) ? HTTP_CATALOG_SERVER : HTTP_SERVER;
+            $block['EMAIL_LOGO_FILE'] = $domain . DIR_WS_CATALOG . 'email/' . EMAIL_LOGO_FILENAME;
+        }
+        if (empty($block['EMAIL_LOGO_ALT_TEXT'])) {
+            $block['EMAIL_LOGO_ALT_TEXT'] = EMAIL_LOGO_ALT_TITLE_TEXT;
+        }
+        if (empty($block['EMAIL_LOGO_WIDTH'])) {
+            $block['EMAIL_LOGO_WIDTH'] = EMAIL_LOGO_WIDTH;
+        }
+        if (empty($block['EMAIL_LOGO_HEIGHT'])) {
+            $block['EMAIL_LOGO_HEIGHT'] = EMAIL_LOGO_HEIGHT;
+        }
 
-    if (!defined ('EMAIL_EXTRA_HEADER_INFO')) define ('EMAIL_EXTRA_HEADER_INFO', '');
-    if (!isset ($block['EXTRA_HEADER_INFO']) || $block['EXTRA_HEADER_INFO'] == '') $block['EXTRA_HEADER_INFO'] = EMAIL_EXTRA_HEADER_INFO;
+        zen_define_default('EMAIL_EXTRA_HEADER_INFO', '');
+        if (empty($block['EXTRA_HEADER_INFO'])) {
+            $block['EXTRA_HEADER_INFO'] = EMAIL_EXTRA_HEADER_INFO;
+        }
 
-    // Obtain the template file to be used
-    $template_filename_base = DIR_FS_EMAIL_TEMPLATES . $langfolder . "email_template_";
-    $template_filename_base_en = DIR_FS_EMAIL_TEMPLATES . "email_template_";
-    $template_filename = DIR_FS_EMAIL_TEMPLATES . $langfolder . "email_template_" . $current_page_base . ".blade.php"; //".html";
+        if (!defined('HTTP_CATALOG_SERVER')) {
+            define('HTTP_CATALOG_SERVER', HTTP_SERVER);
+        }
+        //check for some specifics that need to be included with all messages
+        if (empty($block['EMAIL_STORE_NAME'])) {
+            $block['EMAIL_STORE_NAME'] = STORE_NAME;
+        }
+        if (empty($block['EMAIL_STORE_URL'])) {
+            $block['EMAIL_STORE_URL'] = '<a href="' . HTTP_CATALOG_SERVER . DIR_WS_CATALOG . '">' . STORE_NAME . '</a>';
+        }
+        if (empty($block['EMAIL_STORE_OWNER'])) {
+            $block['EMAIL_STORE_OWNER'] = STORE_OWNER;
+        }
+        if (empty($block['EMAIL_FOOTER_COPYRIGHT'])) {
+            $block['EMAIL_FOOTER_COPYRIGHT'] = EMAIL_FOOTER_COPYRIGHT;
+        }
+        if (empty($block['EMAIL_DISCLAIMER'])) {
+            $block['EMAIL_DISCLAIMER'] = sprintf(EMAIL_DISCLAIMER, '<a href="mailto:' . STORE_OWNER_EMAIL_ADDRESS . '">' . STORE_OWNER_EMAIL_ADDRESS . '</a>');
+        }
+        if (empty($block['EMAIL_SPAM_DISCLAIMER'])) {
+            $block['EMAIL_SPAM_DISCLAIMER'] = EMAIL_SPAM_DISCLAIMER;
+        }
+        if (empty($block['EMAIL_DATE_SHORT'])) {
+            $block['EMAIL_DATE_SHORT'] = zen_date_short(date('Y-m-d H:i:s'));
+        }
+        if (empty($block['EMAIL_DATE_LONG'])) {
+            $block['EMAIL_DATE_LONG'] = zen_date_long(date('Y-m-d H:i:s'));
+        }
+        if (empty($block['BASE_HREF'])) {
+            $block['BASE_HREF'] = HTTP_CATALOG_SERVER . DIR_WS_CATALOG;
+        }
+        if (empty($block['CHARSET'])) {
+            $block['CHARSET'] = CHARSET;
+        }
+        //  if (!isset($block['EMAIL_STYLESHEET']) || $block['EMAIL_STYLESHEET'] == '')      $block['EMAIL_STYLESHEET']       = str_replace(array("\r\n", "\n", "\r"), "",@file_get_contents(DIR_FS_EMAIL_TEMPLATES.'stylesheet.css'));
 
-    $filesToTest = [
-       $template_filename_base . str_replace(array('_extra','_admin'),'',$module) . '.blade.php',
-       $template_filename_base_en . str_replace(array('_extra','_admin'),'',$module) . '.blade.php',
-       DIR_FS_EMAIL_TEMPLATES . $langfolder . "email_template_" . $current_page_base . ".blade.php",
-       DIR_FS_EMAIL_TEMPLATES . "email_template_" . $current_page_base . ".blade.php",
-       (isset($block['EMAIL_TEMPLATE_FILENAME']) && $block['EMAIL_TEMPLATE_FILENAME'] != '' ? $block['EMAIL_TEMPLATE_FILENAME'] . '.blade.php' : NULL),
-       $template_filename_base . 'default' . '.blade.php',
-       $template_filename_base_en . 'default' . '.blade.php',
-    ];
-    $html_template_filename = '';
-    $text_template_filename = '';
-    foreach($filesToTest as $val) {
-      if (empty($val)) { continue; }
-      if (!$html_template_filename && file_exists($val)) {
-        $html_template_filename = $val;
-      }
-      // Note: Cannot use '.' in filename, Blade replaces with '/', so use '_' instead.
-      $try_txt_filename = str_replace('.blade.php', '_text.blade.php', $html_template_filename);
-      if (!$text_template_filename && file_exists($try_txt_filename)) {
-        $text_template_filename = $try_txt_filename;
-      }
-    }
-    if (!$html_template_filename) {
-      if(isset($messageStack)) $messageStack->add('header','ERROR: The email template file for (' . $template_filename_base . ') or (' . $template_filename . ') cannot be found.', 'caution');
-      return ''; // couldn't find template file, so return an empty string for html message.
-    }
-
-	$block['MODULE_NAME'] = $module;
-    if (!defined('HTTP_CATALOG_SERVER')) define('HTTP_CATALOG_SERVER', HTTP_SERVER);
-    //check for some specifics that need to be included with all messages
-    if (!isset($block['EMAIL_STORE_NAME']) || $block['EMAIL_STORE_NAME'] == '')     $block['EMAIL_STORE_NAME']  = STORE_NAME;
-    if (!isset($block['EMAIL_STORE_URL']) || $block['EMAIL_STORE_URL'] == '')       $block['EMAIL_STORE_URL']   = '<a href="'.HTTP_CATALOG_SERVER . DIR_WS_CATALOG.'">'.STORE_NAME.'</a>';
-    if (!isset($block['EMAIL_STORE_OWNER']) || $block['EMAIL_STORE_OWNER'] == '')   $block['EMAIL_STORE_OWNER'] = STORE_OWNER;
-    if (!isset($block['EMAIL_FOOTER_COPYRIGHT']) || $block['EMAIL_FOOTER_COPYRIGHT'] == '') $block['EMAIL_FOOTER_COPYRIGHT'] = EMAIL_FOOTER_COPYRIGHT;
-    if (!isset($block['EMAIL_DISCLAIMER']) || $block['EMAIL_DISCLAIMER'] == '')     $block['EMAIL_DISCLAIMER']  = sprintf(EMAIL_DISCLAIMER, '<a href="mailto:' . STORE_OWNER_EMAIL_ADDRESS . '">'. STORE_OWNER_EMAIL_ADDRESS .'</a>');
-    if (!isset($block['EMAIL_SPAM_DISCLAIMER']) || $block['EMAIL_SPAM_DISCLAIMER'] == '')   $block['EMAIL_SPAM_DISCLAIMER']  = EMAIL_SPAM_DISCLAIMER;
-    if (!isset($block['EMAIL_DATE_SHORT']) || $block['EMAIL_DATE_SHORT'] == '')     $block['EMAIL_DATE_SHORT']  = zen_date_short(date("Y-m-d"));
-    if (!isset($block['EMAIL_DATE_LONG']) || $block['EMAIL_DATE_LONG'] == '')       $block['EMAIL_DATE_LONG']   = zen_date_long(date("Y-m-d"));
-    if (!isset($block['BASE_HREF']) || $block['BASE_HREF'] == '') $block['BASE_HREF'] = HTTP_CATALOG_SERVER . DIR_WS_CATALOG;
-    if (!isset($block['CHARSET']) || $block['CHARSET'] == '') $block['CHARSET'] = CHARSET;
-    //  if (!isset($block['EMAIL_STYLESHEET']) || $block['EMAIL_STYLESHEET'] == '')      $block['EMAIL_STYLESHEET']       = str_replace(array("\r\n", "\n", "\r"), "",@file_get_contents(DIR_FS_EMAIL_TEMPLATES.'stylesheet.css'));
-
-    if (substr($module,-6) != '_extra' && $module != 'contact_us' && $module != 'ask_a_question')  $block['EXTRA_INFO']  = '';
-
-    $block['COUPON_BLOCK'] = '';
-    if (isset($block['COUPON_TEXT_VOUCHER_IS']) && $block['COUPON_TEXT_VOUCHER_IS'] != '' && isset($block['COUPON_TEXT_TO_REDEEM']) && $block['COUPON_TEXT_TO_REDEEM'] != '') {
-      $block['COUPON_BLOCK'] = '<div class="coupon-block">' . $block['COUPON_TEXT_VOUCHER_IS'] . $block['COUPON_DESCRIPTION'] . '<br>' . $block['COUPON_TEXT_TO_REDEEM'] . '<span class="coupon-code">' . $block['COUPON_CODE'] . '</span></div>';
-    }
-
-    $block['GV_BLOCK'] = '';
-      if ( (isset($block['GV_ANNOUNCE']) && $block['GV_ANNOUNCE'] != '') && (isset($block['GV_REDEEM']) && $block['GV_REDEEM'] != '') ) {
-          $block['GV_BLOCK'] = '<div class="gv-block">' . $block['GV_ANNOUNCE'] . '<br>' . $block['GV_REDEEM'] . '</div>';
-      }
-
-    //prepare the "unsubscribe" link:
-    if (IS_ADMIN_FLAG === true) { // is this admin version, or catalog?
-      $block['UNSUBSCRIBE_LINK'] = str_replace("\n",'',TEXT_UNSUBSCRIBE) . ' <a href="' . zen_catalog_href_link(FILENAME_UNSUBSCRIBE, "addr=" . $block['EMAIL_TO_ADDRESS']) . '">' . zen_catalog_href_link(FILENAME_UNSUBSCRIBE, "addr=" . $block['EMAIL_TO_ADDRESS']) . '</a>';
-    } else {
-      $block['UNSUBSCRIBE_LINK'] = str_replace("\n",'',TEXT_UNSUBSCRIBE) . ' <a href="' . zen_href_link(FILENAME_UNSUBSCRIBE, "addr=" . $block['EMAIL_TO_ADDRESS']) . '">' . zen_href_link(FILENAME_UNSUBSCRIBE, "addr=" . $block['EMAIL_TO_ADDRESS']) . '</a>';
-    }
-
-    // Use Laravel Blade engine to render the email templates as if they were views.
-    $path_info = pathinfo($html_template_filename);
-    $cache = DIR_FS_SQL_CACHE;
-
-    $blade = new Blade($path_info['dirname'], $cache);
-
-    // filenames need to have the path and suffix stripped so the Blade engine can find them
-    // $html_template_filename = str_replace(DIR_FS_EMAIL_TEMPLATES, '', $html_template_filename);
-    $html_template_filename = str_replace('.blade.php', '', $path_info['basename']);
-    // try {
-    $html_output = $blade->view()->make($html_template_filename, $block)->render();
-    // } catch (ParseError $ex) {
-    //   throw new Exception("There was a problem parsing your HTML template for $module! {$ex->getMessage()}", 0, $ex);
-    // }
-
-    // If we found a specific text template, use that, otherwise strip the rendered HTML
-    if ($text_template_filename) {
-      $text_template_filename = str_replace(DIR_FS_EMAIL_TEMPLATES, '', $text_template_filename);
-      $text_template_filename = str_replace('.blade.php', '', $text_template_filename);
-      $text_output = $blade->view()->make($text_template_filename, $block)->render();
-    } else {
-      // This is likely to produce a poor result
-      $text_output = strip_tags($html_output);
-      $text_output = html_entity_decode($html_output); // Recover e.g. &#039; back to '
-    }
-
-    //DEBUG -- to display preview on-screen
-    if (EMAIL_SYSTEM_DEBUG === 'preview') echo $html_output;
-
-    return [
-      'html' => $html_output,
-      'text' => $text_output
-    ];
   }
-
     /**
      * Function to build array of additional email content collected and sent on admin-copies of emails:
      *
