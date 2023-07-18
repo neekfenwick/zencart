@@ -1264,56 +1264,56 @@ class order extends base
 
         // lets start with the email confirmation
         // make an array to store the html version
-        $html_msg = [];
+        $block = [];
 
         //intro area
-        $html_msg['EMAIL_TEXT_HEADER'] = EMAIL_TEXT_HEADER;
-        $html_msg['EMAIL_TEXT_FROM'] = EMAIL_TEXT_FROM;
-        $html_msg['INTRO_STORE_NAME'] = STORE_NAME;
-        $html_msg['EMAIL_THANKS_FOR_SHOPPING'] = EMAIL_THANKS_FOR_SHOPPING;
-        $html_msg['EMAIL_DETAILS_FOLLOW'] = EMAIL_DETAILS_FOLLOW;
-        $html_msg['INTRO_ORDER_NUM_TITLE'] = EMAIL_TEXT_ORDER_NUMBER;
-        $html_msg['INTRO_ORDER_NUMBER'] = $zf_insert_id;
-        $html_msg['INTRO_DATE_TITLE'] = EMAIL_TEXT_DATE_ORDERED;
-        $html_msg['INTRO_DATE_ORDERED'] = $zcDate->output(DATE_FORMAT_LONG);
-        $html_msg['INTRO_URL_TEXT'] = EMAIL_TEXT_INVOICE_URL_CLICK;
-        $html_msg['INTRO_URL_VALUE'] = zen_href_link(FILENAME_ACCOUNT_HISTORY_INFO, 'order_id=' . $zf_insert_id, 'SSL', false);
-        $html_msg['EMAIL_CUSTOMER_PHONE'] = $this->customer['telephone'];
-        $html_msg['EMAIL_TEXT_TELEPHONE'] = EMAIL_TEXT_TELEPHONE;
-        $html_msg['EMAIL_SEPARATOR'] = EMAIL_SEPARATOR;
+        $block['EMAIL_TEXT_HEADER'] = EMAIL_TEXT_HEADER;
+        $block['EMAIL_TEXT_FROM'] = EMAIL_TEXT_FROM;
+        $block['INTRO_STORE_NAME'] = STORE_NAME;
+        $block['EMAIL_THANKS_FOR_SHOPPING'] = EMAIL_THANKS_FOR_SHOPPING;
+        $block['EMAIL_DETAILS_FOLLOW'] = EMAIL_DETAILS_FOLLOW;
+        $block['INTRO_ORDER_NUM_TITLE'] = EMAIL_TEXT_ORDER_NUMBER;
+        $block['INTRO_ORDER_NUMBER'] = $zf_insert_id;
+        $block['INTRO_DATE_TITLE'] = EMAIL_TEXT_DATE_ORDERED;
+        $block['INTRO_DATE_ORDERED'] = $zcDate->output(DATE_FORMAT_LONG);
+        $block['INTRO_URL_TEXT'] = EMAIL_TEXT_INVOICE_URL_CLICK;
+        $block['INTRO_URL_VALUE'] = zen_href_link(FILENAME_ACCOUNT_HISTORY_INFO, 'order_id=' . $zf_insert_id, 'SSL', false);
+        $block['EMAIL_CUSTOMER_PHONE'] = $this->customer['telephone'];
+        $block['EMAIL_TEXT_TELEPHONE'] = EMAIL_TEXT_TELEPHONE;
+        $block['EMAIL_SEPARATOR'] = EMAIL_SEPARATOR;
 
         //comments area
-        $html_msg['ORDER_COMMENTS'] = '';
+        $block['ORDER_COMMENTS'] = '';
         if ($this->info['comments']) {
-            $html_msg['ORDER_COMMENTS'] = nl2br(zen_output_string_protected($this->info['comments']));
+            $block['ORDER_COMMENTS'] = nl2br(zen_output_string_protected($this->info['comments']));
         }
 
-        $this->notify('NOTIFY_ORDER_EMAIL_BEFORE_PRODUCTS', [], $html_msg);
+        $this->notify('NOTIFY_ORDER_EMAIL_BEFORE_PRODUCTS', [], $block);
 
         //products area
-        $html_msg['PRODUCTS_TITLE'] = EMAIL_TEXT_PRODUCTS;
-        $html_msg['PRODUCTS_DETAIL'] = $email_products; //'<table class="product-details" border="0" width="100%" cellspacing="0" cellpadding="2">' . $this->products_ordered_html . '</table>';
-        $html_msg['PRODUCTS_ATTR_EXTRA'] = $products_ordered_attributes_extra;
+        $block['PRODUCTS_TITLE'] = EMAIL_TEXT_PRODUCTS;
+        $block['PRODUCTS_DETAIL'] = $email_products; //'<table class="product-details" border="0" width="100%" cellspacing="0" cellpadding="2">' . $this->products_ordered_html . '</table>';
+        $block['PRODUCTS_ATTR_EXTRA'] = $products_ordered_attributes_extra;
 
         //order totals area
-        $html_msg['ORDER_TOTALS'] = $order_totals;
+        $block['ORDER_TOTALS'] = $order_totals;
 
         //addresses area: Delivery
-        $html_msg['HEADING_ADDRESS_INFORMATION'] = HEADING_ADDRESS_INFORMATION;
-        $html_msg['ADDRESS_DELIVERY_TITLE'] = EMAIL_TEXT_DELIVERY_ADDRESS;
+        $block['HEADING_ADDRESS_INFORMATION'] = HEADING_ADDRESS_INFORMATION;
+        $block['ADDRESS_DELIVERY_TITLE'] = EMAIL_TEXT_DELIVERY_ADDRESS;
 
         $storepickup = (strpos($this->info['shipping_module_code'], "storepickup") !== false);
         if ($this->content_type != 'virtual' && !$storepickup) {
-            $html_msg['ADDRESS_DELIVERY_DETAIL'] = zen_address_label($_SESSION['customer_id'], $_SESSION['sendto'], false, '', "\n");
+            $block['ADDRESS_DELIVERY_DETAIL'] = zen_address_label($_SESSION['customer_id'], $_SESSION['sendto'], false, '', "\n");
         } else {
-            $html_msg['ADDRESS_DELIVERY_DETAIL'] = 'n/a';
+            $block['ADDRESS_DELIVERY_DETAIL'] = 'n/a';
         }
-        $html_msg['SHIPPING_METHOD_TITLE'] = HEADING_SHIPPING_METHOD;
-        $html_msg['SHIPPING_METHOD_DETAIL'] = (!empty($this->info['shipping_method'])) ? $this->info['shipping_method'] : 'n/a';
+        $block['SHIPPING_METHOD_TITLE'] = HEADING_SHIPPING_METHOD;
+        $block['SHIPPING_METHOD_DETAIL'] = (!empty($this->info['shipping_method'])) ? $this->info['shipping_method'] : 'n/a';
 
         //addresses area: Billing
-        $html_msg['ADDRESS_BILLING_TITLE'] = EMAIL_TEXT_BILLING_ADDRESS;
-        $html_msg['ADDRESS_BILLING_DETAIL'] = zen_address_label($_SESSION['customer_id'], $_SESSION['billto'], false, '', "\n");
+        $block['ADDRESS_BILLING_TITLE'] = EMAIL_TEXT_BILLING_ADDRESS;
+        $block['ADDRESS_BILLING_DETAIL'] = zen_address_label($_SESSION['customer_id'], $_SESSION['billto'], false, '', "\n");
 
         if (!empty($_SESSION['payment']) && is_object($GLOBALS[$_SESSION['payment']])) {
             $cc_num_display = (isset($this->info['cc_number']) && $this->info['cc_number'] != '') ? /*substr($this->info['cc_number'], 0, 4) . */
@@ -1321,9 +1321,9 @@ class order extends base
             $payment_class = $_SESSION['payment'];
         }
 
-        $html_msg['PAYMENT_METHOD_TITLE'] = EMAIL_TEXT_PAYMENT_METHOD;
-        $html_msg['PAYMENT_METHOD_DETAIL'] = (isset($GLOBALS[$_SESSION['payment']]) && is_object($GLOBALS[$_SESSION['payment']]) ? $GLOBALS[$payment_class]->title : PAYMENT_METHOD_GV);
-        $html_msg['PAYMENT_METHOD_FOOTER'] = (
+        $block['PAYMENT_METHOD_TITLE'] = EMAIL_TEXT_PAYMENT_METHOD;
+        $block['PAYMENT_METHOD_DETAIL'] = (isset($GLOBALS[$_SESSION['payment']]) && is_object($GLOBALS[$_SESSION['payment']]) ? $GLOBALS[$payment_class]->title : PAYMENT_METHOD_GV);
+        $block['PAYMENT_METHOD_FOOTER'] = (
             !empty($payment_class) && isset($GLOBALS[$payment_class]->email_footer) &&
             is_object($GLOBALS[$_SESSION['payment']]) && $GLOBALS[$payment_class]->email_footer != ''
         ) ? nl2br($GLOBALS[$payment_class]->email_footer) : (isset($this->info['cc_type']) && $this->info['cc_type'] != '' ? $this->info['cc_type'] . ' ' . $cc_num_display : '');
@@ -1331,45 +1331,45 @@ class order extends base
         // Add in store specific order message
         $this->email_order_message = defined('EMAIL_ORDER_MESSAGE') ? constant('EMAIL_ORDER_MESSAGE') : '';
         $this->notify('NOTIFY_ORDER_SET_ORDER_MESSAGE');
-        $html_msg['EMAIL_ORDER_MESSAGE'] = $this->email_order_message;
+        $block['EMAIL_ORDER_MESSAGE'] = $this->email_order_message;
 
-        $html_msg['EMAIL_FIRST_NAME'] = $this->customer['firstname'];
-        $html_msg['EMAIL_LAST_NAME'] = $this->customer['lastname'];
+        $block['EMAIL_FIRST_NAME'] = $this->customer['firstname'];
+        $block['EMAIL_LAST_NAME'] = $this->customer['lastname'];
 
         // -----
         // Send customer confirmation email unless observer overrides it.
         $send_customer_email = true;
-        $this->notify('NOTIFY_ORDER_INVOICE_CONTENT_READY_TO_SEND', ['zf_insert_id' => $zf_insert_id, 'html_email' => $html_msg], $html_msg, $send_customer_email);
+        $this->notify('NOTIFY_ORDER_INVOICE_CONTENT_READY_TO_SEND', ['zf_insert_id' => $zf_insert_id, 'html_email' => $block], $block, $send_customer_email);
         if ($send_customer_email === true) {
-            zen_mail_from_template($this->customer['firstname'] . ' ' . $this->customer['lastname'], $this->customer['email_address'], EMAIL_TEXT_SUBJECT . EMAIL_ORDER_NUMBER_SUBJECT . $zf_insert_id, $html_msg, STORE_NAME, EMAIL_FROM, 'checkout', $this->attachArray);
+            zen_mail_from_template($this->customer['firstname'] . ' ' . $this->customer['lastname'], $this->customer['email_address'], EMAIL_TEXT_SUBJECT . EMAIL_ORDER_NUMBER_SUBJECT . $zf_insert_id, $block, STORE_NAME, EMAIL_FROM, 'checkout', $this->attachArray);
         }
 
         // send additional emails
         if (SEND_EXTRA_ORDER_EMAILS_TO != '') {
             $extra_info = email_collect_extra_info('', '', $this->customer['firstname'] . ' ' . $this->customer['lastname'], $this->customer['email_address'], $this->customer['telephone']);
-            $html_msg['EXTRA_INFO'] = $extra_info;
+            $block['EXTRA_INFO'] = $extra_info;
 
             // include authcode and transaction id in admin-copy of email
             $payment_auth_code = !empty($GLOBALS[$_SESSION['payment']]->auth_code) ? $GLOBALS[$_SESSION['payment']]->auth_code : '';
             $payment_transaction_id = !empty($GLOBALS[$_SESSION['payment']]->transaction_id) ? $GLOBALS[$_SESSION['payment']]->transaction_id : '';
             if ($payment_auth_code !== '' || $payment_transaction_id !== '') {
                 $pmt_details = ($payment_auth_code != '' ? 'AuthCode: ' . $payment_auth_code . '  ' : '') . ($payment_transaction_id != '' ? 'TransID: ' . $payment_transaction_id : '') . "\n\n";
-                $html_msg['EMAIL_TEXT_HEADER'] = $pmt_details . $html_msg['EMAIL_TEXT_HEADER'];
+                $block['EMAIL_TEXT_HEADER'] = $pmt_details . $block['EMAIL_TEXT_HEADER'];
             }
 
             // Add extra data via observer class
             $sendExtraOrderEmail = true;
-            $this->notify('NOTIFY_ORDER_INVOICE_CONTENT_FOR_ADDITIONAL_EMAILS', $zf_insert_id, $html_msg, $sendExtraOrderEmail);
+            $this->notify('NOTIFY_ORDER_INVOICE_CONTENT_FOR_ADDITIONAL_EMAILS', $zf_insert_id, $block, $sendExtraOrderEmail);
 
             if ($sendExtraOrderEmail) {
                 zen_mail_from_template('', SEND_EXTRA_ORDER_EMAILS_TO,
                     SEND_EXTRA_NEW_ORDERS_EMAILS_TO_SUBJECT . ' ' . EMAIL_TEXT_SUBJECT . EMAIL_ORDER_NUMBER_SUBJECT . $zf_insert_id,
-                    $html_msg, STORE_NAME, EMAIL_FROM, 'checkout_extra',
+                    $block, STORE_NAME, EMAIL_FROM, 'checkout_extra',
                     $this->attachArray, $this->customer['firstname'] . ' ' . $this->customer['lastname'],
                     $this->customer['email_address']);
             }
         }
-        $this->notify('NOTIFY_ORDER_AFTER_SEND_ORDER_EMAIL', $zf_insert_id, $extra_info, $html_msg);
+        $this->notify('NOTIFY_ORDER_AFTER_SEND_ORDER_EMAIL', $zf_insert_id, $extra_info, $block);
     }
 
 }

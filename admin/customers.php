@@ -401,7 +401,6 @@ if (!empty($action)) {
                     $customer->setPassword($password_new);
 
                     $message = EMAIL_CUSTOMER_PWD_CHANGE_MESSAGE . "\n\n" . $password_new;
-                    // $html_msg['EMAIL_MESSAGE_HTML'] = nl2br($message);
                     zen_mail_from_template(
                         $custinfo['customers_firstname'] . ' ' . $custinfo['customers_lastname'],
                         $custinfo['customers_email_address'],

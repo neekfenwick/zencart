@@ -97,47 +97,47 @@ function zen_update_orders_history($orders_id, $message = '', $updated_by = null
             $notify_customer = ($notify_customer == 1 || $notify_customer == -1 || $notify_customer == -2) ? $notify_customer : 0;
         
             if ($notify_customer == 1 || $notify_customer == -2) {
-                $html_msg = [];
+                $block = [];
                 $new_orders_status_name = zen_get_orders_status_name($orders_new_status);
                 if ($new_orders_status_name == '') {
                     $new_orders_status_name = 'N/A';
                 }
 
                 if ($orders_new_status != $orders_current_status) {
-                    $html_msg['EMAIL_TEXT_STATUS_UPDATED'] = OSH_EMAIL_TEXT_STATUS_UPDATED;
-                    $html_msg['EMAIL_TEXT_STATUS_CHANGE_OLD'] = OSH_EMAIL_TEXT_STATUS_CHANGE_OLD;
-                    $html_msg['EMAIL_TEXT_STATUS_CHANGE_NEW'] = OSH_EMAIL_TEXT_STATUS_CHANGE_NEW;
-                    $html_msg['OLD_ORDER_STATUS'] = zen_get_orders_status_name($orders_current_status);
-                    $html_msg['NEW_ORDER_STATUS'] = $new_orders_status_name;
+                    $block['EMAIL_TEXT_STATUS_UPDATED'] = OSH_EMAIL_TEXT_STATUS_UPDATED;
+                    $block['EMAIL_TEXT_STATUS_CHANGE_OLD'] = OSH_EMAIL_TEXT_STATUS_CHANGE_OLD;
+                    $block['EMAIL_TEXT_STATUS_CHANGE_NEW'] = OSH_EMAIL_TEXT_STATUS_CHANGE_NEW;
+                    $block['OLD_ORDER_STATUS'] = zen_get_orders_status_name($orders_current_status);
+                    $block['NEW_ORDER_STATUS'] = $new_orders_status_name;
                 } else {
-                    $html_msg['EMAIL_TEXT_STATUS_UPDATED'] = OSH_EMAIL_TEXT_STATUS_NO_CHANGE;
-                    $html_msg['EMAIL_TEXT_STATUS_LABEL'] = OSH_EMAIL_TEXT_STATUS_LABEL;
-                    $html_msg['ORDER_STATUS'] = $new_orders_status_name;
+                    $block['EMAIL_TEXT_STATUS_UPDATED'] = OSH_EMAIL_TEXT_STATUS_NO_CHANGE;
+                    $block['EMAIL_TEXT_STATUS_LABEL'] = OSH_EMAIL_TEXT_STATUS_LABEL;
+                    $block['ORDER_STATUS'] = $new_orders_status_name;
                 }
 
                 // Add in store specific order message
                 $email_order_message = defined('EMAIL_ORDER_UPDATE_MESSAGE') ? constant('EMAIL_ORDER_UPDATE_MESSAGE') : '';
                 $GLOBALS['zco_notifier']->notify('ZEN_UPDATE_ORDERS_HISTORY_SET_ORDER_UPDATE_MESSAGE', $orders_id, $email_order_message); 
-                $html_msg['EMAIL_ORDER_UPDATE_MESSAGE'] = $email_order_message;
+                $block['EMAIL_ORDER_UPDATE_MESSAGE'] = $email_order_message;
 
-                $html_msg['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
-                $html_msg['EMAIL_CUSTOMERS_NAME']    = $osh_info->fields['customers_name'];
-                $html_msg['EMAIL_TEXT_ORDER_NUMBER'] = OSH_EMAIL_TEXT_ORDER_NUMBER . ' ' . $orders_id;
-                $html_msg['EMAIL_TEXT_INVOICE_URL']  = zen_catalog_href_link(FILENAME_CATALOG_ACCOUNT_HISTORY_INFO, "order_id=$orders_id", 'SSL');
-                $html_msg['EMAIL_OSH_EMAIL_TEXT_INVOICE_URL'] = OSH_EMAIL_TEXT_INVOICE_URL;
-                $html_msg['EMAIL_TEXT_DATE_ORDERED'] = OSH_EMAIL_TEXT_DATE_ORDERED . ' ' . zen_date_long($osh_info->fields['date_purchased']);
-                $html_msg['EMAIL_TEXT_COMMENTS_UPDATE'] = OSH_EMAIL_TEXT_COMMENTS_UPDATE;
-                $html_msg['EMAIL_TEXT_STATUS_COMMENTS'] = $comments_content;
-                $html_msg['EMAIL_TEXT_NEW_STATUS'] = $new_orders_status_name;
-                $html_msg['EMAIL_TEXT_STATUS_PLEASE_REPLY'] = OSH_EMAIL_TEXT_STATUS_PLEASE_REPLY;
-                $html_msg['EMAIL_PAYPAL_TRANSID'] = '';
+                $block['EMAIL_SALUTATION'] = EMAIL_SALUTATION;
+                $block['EMAIL_CUSTOMERS_NAME']    = $osh_info->fields['customers_name'];
+                $block['EMAIL_TEXT_ORDER_NUMBER'] = OSH_EMAIL_TEXT_ORDER_NUMBER . ' ' . $orders_id;
+                $block['EMAIL_TEXT_INVOICE_URL']  = zen_catalog_href_link(FILENAME_CATALOG_ACCOUNT_HISTORY_INFO, "order_id=$orders_id", 'SSL');
+                $block['EMAIL_OSH_EMAIL_TEXT_INVOICE_URL'] = OSH_EMAIL_TEXT_INVOICE_URL;
+                $block['EMAIL_TEXT_DATE_ORDERED'] = OSH_EMAIL_TEXT_DATE_ORDERED . ' ' . zen_date_long($osh_info->fields['date_purchased']);
+                $block['EMAIL_TEXT_COMMENTS_UPDATE'] = OSH_EMAIL_TEXT_COMMENTS_UPDATE;
+                $block['EMAIL_TEXT_STATUS_COMMENTS'] = $comments_content;
+                $block['EMAIL_TEXT_NEW_STATUS'] = $new_orders_status_name;
+                $block['EMAIL_TEXT_STATUS_PLEASE_REPLY'] = OSH_EMAIL_TEXT_STATUS_PLEASE_REPLY;
+                $block['EMAIL_PAYPAL_TRANSID'] = '';
 
                 if (empty($email_subject)) {
                     $email_subject = OSH_EMAIL_TEXT_SUBJECT . ' #' . $orders_id;
                 }
 
                 if ($notify_customer == 1) {
-                    zen_mail_from_template($osh_info->fields['customers_name'], $osh_info->fields['customers_email_address'], $email_subject, $html_msg, STORE_NAME, EMAIL_FROM, 'order_status', $filename);
+                    zen_mail_from_template($osh_info->fields['customers_name'], $osh_info->fields['customers_email_address'], $email_subject, $block, STORE_NAME, EMAIL_FROM, 'order_status', $filename);
                 }
 
                 // PayPal Trans ID, if any
@@ -149,7 +149,7 @@ function zen_update_orders_history($orders_id, $message = '', $updated_by = null
                 );
                 if (!$result->EOF) {
                     // XXX $email_text .= "\n\n" . ' PayPal Trans ID: ' . $result->fields['txn_id'];
-                    $html_msg['EMAIL_PAYPAL_TRANSID'] = $result->fields['txn_id'];
+                    $block['EMAIL_PAYPAL_TRANSID'] = $result->fields['txn_id'];
                 }
 
                 //send extra emails
@@ -157,7 +157,7 @@ function zen_update_orders_history($orders_id, $message = '', $updated_by = null
                     $send_extra_emails_to = (string)SEND_EXTRA_ORDERS_STATUS_ADMIN_EMAILS_TO;
                 }
                 if (!empty($send_extra_emails_to)) {
-                    zen_mail_from_template('', $send_extra_emails_to, SEND_EXTRA_ORDERS_STATUS_ADMIN_EMAILS_TO_SUBJECT . ' ' . $email_subject, $html_msg, STORE_NAME, EMAIL_FROM, 'order_status_extra', $filename);
+                    zen_mail_from_template('', $send_extra_emails_to, SEND_EXTRA_ORDERS_STATUS_ADMIN_EMAILS_TO_SUBJECT . ' ' . $email_subject, $block, STORE_NAME, EMAIL_FROM, 'order_status_extra', $filename);
                 }
             }
     
