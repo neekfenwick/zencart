@@ -790,25 +790,7 @@
         // Identify and Read the template file for the type of message being sent
         $langfolder = (strtolower($_SESSION['languages_code']) === 'en') ? '' : (strtolower($_SESSION['languages_code']) . '/');
 
-        // Handle CSS
-        $block['EMAIL_COMMON_CSS'] = '';
-        $filesToTest = [
-            DIR_FS_EMAIL_TEMPLATES . $langfolder . 'email_common.css',
-            DIR_FS_EMAIL_TEMPLATES . 'email_common.css',
-        ];
-        $found = false;
-        foreach ($filesToTest as $val) {
-            if (file_exists($val)) {
-                $block['EMAIL_COMMON_CSS'] = file_get_contents($val);
-                $found = true;
-                break;
-            }
-        }
-        if (false === $found) {
-            trigger_error('Missing common email CSS file: ' . DIR_FS_EMAIL_TEMPLATES . 'email_common.css', E_USER_WARNING);
-        }
-
-        email_add_common_data($block);
+        email_add_common_data($block, $langfolder);
 
         // Obtain the template file to be used
         $template_filename_base = DIR_FS_EMAIL_TEMPLATES . 'legacy/' . $langfolder . 'email_template_';
@@ -919,25 +901,7 @@
         // Identify and Read the template file for the type of message being sent
         $langfolder = (strtolower($_SESSION['languages_code']) == 'en') ? '' : strtolower($_SESSION['languages_code']) . '/';
 
-        // Handle CSS
-        $block['EMAIL_COMMON_CSS'] = '';
-        $filesToTest = array(
-            DIR_FS_EMAIL_TEMPLATES . $langfolder . 'email_common.css',
-            DIR_FS_EMAIL_TEMPLATES . 'email_common.css'
-        );
-        $found = false;
-        foreach($filesToTest as $val) {
-            if (file_exists($val)) {
-                $block['EMAIL_COMMON_CSS'] = file_get_contents($val);
-                $found = true;
-                break;
-            }
-        }
-        if (false === $found) {
-            trigger_error('Missing common email CSS file: ' . DIR_FS_EMAIL_TEMPLATES . 'email_common.css', E_USER_WARNING);
-        }
-
-        email_add_common_data($block);
+        email_add_common_data($block, $langfolder);
 
         $block['MODULE_NAME'] = $module;
 
@@ -1026,8 +990,27 @@
     }
 
     function email_add_common_data(
-        array &$block
+        array &$block,
+        string $langfolder
     ) {
+        // Handle CSS
+        $block['EMAIL_COMMON_CSS'] = '';
+        $filesToTest = [
+            DIR_FS_EMAIL_TEMPLATES . $langfolder . 'email_common.css',
+            DIR_FS_EMAIL_TEMPLATES . 'email_common.css',
+        ];
+        $found = false;
+        foreach ($filesToTest as $val) {
+            if (file_exists($val)) {
+                $block['EMAIL_COMMON_CSS'] = file_get_contents($val);
+                $found = true;
+                break;
+            }
+        }
+        if (false === $found) {
+            trigger_error('Missing common email CSS file: ' . DIR_FS_EMAIL_TEMPLATES . 'email_common.css', E_USER_WARNING);
+        }
+
         // Handle logo image
         if (empty($block['EMAIL_LOGO_FILE'])) {
             $domain = (IS_ADMIN_FLAG === true) ? HTTP_CATALOG_SERVER : HTTP_SERVER;

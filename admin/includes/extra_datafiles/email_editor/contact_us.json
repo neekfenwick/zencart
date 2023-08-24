@@ -1,0 +1,7 @@
+{
+    "CONTEXT": [
+        { "label": "A dummy row of context", "value": "A dummy value" },
+        { "label": "A second dummy row of context", "value": "A second dummy value" }
+    ],
+    "EMAIL_MESSAGE": "This is a test message."
+}
