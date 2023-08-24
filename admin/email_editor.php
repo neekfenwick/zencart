@@ -188,7 +188,8 @@ switch ($_GET['action']) {
       .full-width {
           grid-column: 1/3;
       }
-      #templateDataNode {
+      #templateDataNode,
+      #stringsBundleNode {
           display: grid;
           grid-template-columns: 1fr 2fr;
           gap: 2px;
@@ -299,6 +300,12 @@ switch ($_GET['action']) {
             e.g. lang.contact_us.php ONLY and allow editing of those fields.
           </div>
           <div class="full-width template-data" id="templateDataNode">
+          </div>
+          <div class="full-width">
+            NOTE: NEW Want to load strings from lang strings file
+            e.g. lang.contact_us.php ONLY and allow editing of those fields.
+          </div>
+          <div class="full-width template-data" id="stringsBundleNode">
           </div>
 
           <!-- <div class="row"> -->

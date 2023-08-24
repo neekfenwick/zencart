@@ -9,6 +9,7 @@
 require_once(DIR_FS_CATALOG . DIR_WS_CLASSES . 'PhiloBlade.php');
 use Zencart\LanguageLoader\LanguageLoaderFactory;
 use Philo\Blade\Blade;
+use Illuminate\View\ViewException;
 
 class zcAjaxEmailEditor extends base
 {
@@ -16,11 +17,83 @@ class zcAjaxEmailEditor extends base
         header('Content-Type', 'application/json');
     }
 
+    // OBSOLETE?
     public function getDefaultTemplateData()
     {
         $module = $_POST['module'];
         $templateData = $this->generateTemplateData($module);
         return $templateData;
+    }
+
+    public function getStringsBundle() {
+        global $db, $template_dir;
+        // Look in same places the LanguageLoader does
+
+        $rootPath = DIR_WS_LANGUAGES;
+        $language = $_SESSION['language'];
+        $arrayFileName = $_POST['module'];
+
+//         $template_dir = 'template_default';
+// $sql = "SELECT template_dir, template_language, template_language=" . (int)$_SESSION['languages_id'] . " AS choice1, template_language=0 AS choice2
+//         FROM " . TABLE_TEMPLATE_SELECT . "
+//         ORDER BY choice1 DESC, choice2 DESC, template_language";
+// $result = $db->Execute($sql);
+// $template_dir = $result->fields['template_dir'];
+
+
+        $mainFile = $rootPath . $language . $extraPath. '/lang.' . $arrayFileName . '.php';
+        $fallbackFile = $rootPath . $language . '/lang.' . $arrayFileName . '.php';
+        if (file_exists($mainFile)) {
+            return $this->parseStringsBundleFile($mainFile);
+        }
+    }
+
+    /**
+     * Attempt to read a strings bundle into a simple key=>value list.
+     * If any line fails, ignore it, so it's not editable but the rest are.
+     *
+     * @param [type] $filename
+     * @return void
+     */
+    protected function parseStringsBundleFile($filename) {
+        $file_lines = file_get_contents($filename);
+        $file_lines = explode("\n", $file_lines);
+        $results = [];
+        $matches = [];
+        foreach ($file_lines as $line) {
+            if (1 == preg_match('/^\s*["\'](\S*)["\']\s*=>\s*["\']([^"\']*),?/', $line, $matches)) {
+                $results[$matches[1]] = $matches[2];
+            }
+        }
+        return $results;
+    }
+
+    /**
+     * Generic handling for when a template, either HTML or TEXT, has failed parsing.
+     * In these cases the exception contains the filename and linenumber of the
+     * generated PHP file from the template that failed.
+     *
+     * @param [type] $ex
+     * @param [type] $template
+     * @return void
+     */
+    public function handleExceptionForTemplate(ViewException $ex, string $template)
+    {
+        // Try to quote context of the error in the generated PHP file, around $ex->line
+        $file_contents = file_get_contents($ex->getFile());
+        $line = $ex->getLine();
+        $file_lines = explode("\n", $file_contents);
+        $sliced = array_slice($file_lines, $line - 2, 5);
+        // $sliced[3] = 'APPROX ERROR LOCATION ==> ' . $sliced[3];
+        foreach ($sliced as $idx => &$eachLine) {
+            $realLine = $idx + $line - 2;
+            $eachLine = "Line $realLine: " . $eachLine;
+        }
+        return [
+            'view_error' => $ex->getMessage(),
+            'lines' => $sliced,
+            'template' => $template
+        ];
     }
 
     public function generatePreview()
@@ -36,8 +109,16 @@ class zcAjaxEmailEditor extends base
         if (empty($module)) {
             return [ 'error' => 'No email module name provided.' ];
         }
-        if (empty($payload->template_data)) {
-            return [ 'error' => 'No templateData provided.' ];
+        // OBSOLETE? if (empty($payload->template_data)) {
+        //     return [ 'error' => 'No templateData provided.' ];
+        // }
+        if (empty($payload->strings_bundle)) {
+            return [ 'error' => 'No strings_bundle provided.' ];
+        }
+        foreach ($payload->strings_bundle as $key => $value) {
+            if (!defined($key)) {
+                define($key, $value);
+            }
         }
 
         // Load language strings that might be used by the email template
@@ -46,50 +127,44 @@ class zcAjaxEmailEditor extends base
         $languageLoaderFactory = new LanguageLoaderFactory();
         $languageLoader = $languageLoaderFactory->make('catalog', null, $module, $template_dir);
         $languageLoader->loadInitialLanguageDefines();
-        $languageLoader->loadLanguageForView();
+        $languageLoader->loadLanguageForView(); // These ought to be ignored if stringsBundle had them?
         $languageLoader->finalizeLanguageDefines();
 
         try {
             // Create 'preview' email template files on disk for the email system to use for this time only.
             // Alternatively, change the .._from_blade_template function to take template body overrides.
-            // $templateData = $this->generateTemplateData($module);
-            // $templateData = $this->sanitiseTemplateData($payload->template_data);
-            $templateData = [];
-            $this->object_to_array($payload->template_data, $templateData);
+            $templateData = $this->generateTemplateData($module);
+            $templateData = $this->sanitiseTemplateData($templateData);
+            // $templateData = [];
+            // $this->object_to_array($payload->template_data, $templateData);
             // $email = zen_build_html_email_from_blade_template($module, $templateData);
 
             $blade = new Blade(DIR_FS_EMAIL_TEMPLATES, DIR_FS_SQL_CACHE);
             file_put_contents(DIR_FS_EMAIL_TEMPLATES . '/email_template_preview.blade.php', $payload->template_html);
             file_put_contents(DIR_FS_EMAIL_TEMPLATES . '/email_template_preview_text.blade.php', $payload->template_text);
 
-            // filenames need to have the path and suffix stripped so the Blade engine can find them
-            // $html_template_filename = str_replace(DIR_FS_EMAIL_TEMPLATES, '', $html_template_filename);
-            // try {
-            $html_output = $blade->view()->make('email_template_preview', $templateData)->render();
-            $text_output = $blade->view()->make('email_template_preview_text', $templateData)->render();
-
-            return [
-                'html' => $html_output,
-                'text' => $text_output
-            ];
-        } catch (Illuminate\View\ViewException $ex) {
-            // Try to quote context of the error, around $ex->line
-            $file_contents = file_get_contents($ex->getFile());
-            $line = $ex->getLine();
-            $file_lines = explode("\n", $file_contents);
-            $sliced = array_slice($file_lines, $line - 2, 5);
-            // $sliced[3] = 'APPROX ERROR LOCATION ==> ' . $sliced[3];
-            foreach ($sliced as $idx => &$eachLine) {
-                $realLine = $idx + $line - 2;
-                $eachLine = "Line $realLine: " . $eachLine;
+            // Either template may fail, so wrap each attempt so we can report specifics.
+            try {
+                $html_output = $blade->view()->make('email_template_preview', $templateData)->render();
+            } catch (ViewException $ex) {
+                return $this->handleExceptionForTemplate($ex, 'HTML');
             }
-            return [
-                'view_error' => $ex->getMessage(),
-                'lines' => $sliced
-             ];
+
+            try {
+                $text_output = $blade->view()->make('email_template_preview_text', $templateData)->render();
+            } catch (ViewException $ex) {
+                return $this->handleExceptionForTemplate($ex, 'TEXT');
+            }
         } catch (Throwable $ex) {
             return [ 'error' => $ex->getMessage() ];
         }
+
+        return [
+            'html' => $html_output,
+            'text' => $text_output
+        ];
+
+
     }
 
     protected function sanitiseTemplateData ($templateData) {

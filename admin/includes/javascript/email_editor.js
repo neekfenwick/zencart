@@ -45,7 +45,7 @@ jQuery( () => {
     const previewTEXTIframe = document.getElementById('preview_text');
 
     /**
-     * On page init, load the default template data for the selected email module.
+     * OBSOLETE? On page init, load the default template data for the selected email module.
      * This can then be edited before it is used to generate a preview.
      */
     function loadDefaultTemplateData () {
@@ -56,15 +56,35 @@ jQuery( () => {
         }).then( (response) => {
             console.log('Response: ', response);
 
-            buildTemplateDataInputs(response);
+            buildDataInputs('#templateDataNode', response);
 
             // Now we have template data we can generate an initial preview.
             showPreview();
         })
     }
 
-    function buildTemplateDataInputs (templateData) {
-        const parent = jQuery('#templateDataNode');
+    /**
+     * On page init, load the default template data for the selected email module.
+     * This can then be edited before it is used to generate a preview.
+     */
+    function loadStringsBundleData () {
+        const name = jQuery('select[name=edit_name]')[0].value;
+        const path = pathForTemplate(name);
+        zcJS.ajax({
+            url: `${path}ajax.php?act=ajaxEmailEditor&method=getStringsBundle&module=${name}`,
+            data: { module: name }
+        }).then( (response) => {
+            console.log('Response: ', response);
+
+            buildDataInputs('#stringsBundleNode', response);
+
+            // Now we have strings data we can generate an initial preview.
+            showPreview();
+        })
+    }
+
+    function buildDataInputs (containerSelector, templateData) {
+        const parent = jQuery(containerSelector);
         Object.keys(templateData).sort().forEach( (key, idx) => {
             const value = templateData[key];
             // document.createElement
@@ -85,6 +105,12 @@ jQuery( () => {
         })
     }
 
+    function pathForTemplate (name) {
+        const adminTemplates = [ 'newsletter' ];
+        const isAdmin = adminTemplates.indexOf(name) !== -1;
+        return isAdmin ? '' : '/';
+    }
+
     function showPreview (format) {
         // const editor = formatMap[format].editor;
         // const preview = formatMap[format].preview;
@@ -92,33 +118,40 @@ jQuery( () => {
         const contents = getEditorContents();
 
         // Gather templateData from the inputs on screen
-        const parent = jQuery('#templateDataNode');
-        let templateData = {};
+        // const parent = jQuery('#templateDataNode');
+        // let templateData = {};
+        // let nodes = parent.find('span[data-idx]');
+        // nodes.each( (idx, node) => {
+        //     const valueNode = parent.find('input[data-idx=' + node.getAttribute('data-idx') + ']')[0];
+        //     const value = valueNode.value;
+        //     try {
+        //         const looksLikeJSON = value.substring(0, 1) == '{' || value.substring(0, 1) == '[';
+        //         templateData[node.getAttribute('data-key')] = looksLikeJSON ? JSON.parse(value) : value;
+        //     } catch (ex) {
+        //         /* Squash JSON errors */
+        //     }
+        // })
+        const parent = jQuery('#stringsBundleNode');
+        let stringsBundleData = {};
         let nodes = parent.find('span[data-idx]');
         nodes.each( (idx, node) => {
             const valueNode = parent.find('input[data-idx=' + node.getAttribute('data-idx') + ']')[0];
             const value = valueNode.value;
-            try {
-                const looksLikeJSON = value.substring(0, 1) == '{' || value.substring(0, 1) == '[';
-                templateData[node.getAttribute('data-key')] = looksLikeJSON ? JSON.parse(value) : value;
-            } catch (ex) {
-                /* Squash JSON errors */
-            }
+            stringsBundleData[node.getAttribute('data-key')] = value;
         })
 
         previewHTMLIframe.contentDocument.body.innerHTML = '<h2>Loading...<h2>';
         previewTEXTIframe.contentDocument.body.innerHTML = '<h2>Loading...<h2>';
         // Language strings will be loaded according to whether you call the catalog or admin side.
-        const adminTemplates = [ 'newsletter' ];
-        const isAdmin = adminTemplates.indexOf(name) !== -1;
-        const path = isAdmin ? '' : '/';
+        const path = pathForTemplate(name);
         zcJS.ajax({
             url: `${path}ajax.php?act=ajaxEmailEditor&method=generatePreview`,
             data: JSON.stringify({
                 name: name,
                 template_html: contents.html,
                 template_text: contents.text,
-                template_data: templateData
+                // OBSOLETE? template_data: templateData
+                strings_bundle: stringsBundleData
             })
         }).done( renderResults ).catch( (response) => {
             console.error(`email_editor: caught error `);
@@ -149,7 +182,7 @@ jQuery( () => {
         if (response.view_error) {
             jQuery('#syntax_error_display').show();
             const errNode = document.getElementById('syntax_error_message');
-            errNode.innerHTML = response.view_error;
+            errNode.innerHTML = `Error in the ${response.template} template!  ` + response.view_error;
 
             if (response.lines) {
                 response.lines.forEach( (line) => {
@@ -250,7 +283,8 @@ jQuery( () => {
             }
 
             // showPreview();
-            loadDefaultTemplateData();
+            // loadDefaultTemplateData();
+            loadStringsBundleData();
 
             // Buttons bar
             jQuery('#regen_previews_button').on('click', showPreview);

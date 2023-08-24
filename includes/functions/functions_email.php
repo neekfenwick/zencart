@@ -144,7 +144,7 @@
                 if (empty($block['EMAIL_TO_ADDRESS'])) {
                     $block['EMAIL_TO_ADDRESS'] = $to_email_address;
                 }
-                if (empty($block['EMAIL_SUBJECT'])) {
+                if (empty($block['EMAIL_SUBJECT']) && !defined('EMAIL_SUBJECT')) {
                     $block['EMAIL_SUBJECT'] = $email_subject;
                 }
                 if (empty($block['EMAIL_FROM_NAME'])) {
