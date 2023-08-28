@@ -188,6 +188,11 @@ switch ($_GET['action']) {
       .full-width {
           grid-column: 1/3;
       }
+      .buttons {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
       #templateDataNode,
       #stringsBundleNode {
           display: grid;
@@ -251,16 +256,12 @@ switch ($_GET['action']) {
           $neither_writable = !$html_writable && !$text_writable;
       ?>
           <div class="row"><strong><?php echo TEXT_INFO_EDITING . '&nbsp;' . $file; ?></strong></div>
-          <!-- <?php echo zen_draw_form('language', FILENAME_EMAIL_EDITOR, 'lngdir=' . $_SESSION['language'] . '&filename=' . $_GET['filename'] . '&action=save'); ?> -->
-          <!-- <div class="row"> -->
-            <!-- <div class="col-sm-6"> -->
+
           <div class="editors-container">
             <div>
-              HTML Email Content
+              <h2>HTML Email Content</h2>
             <?php
             function quickMessageStack ($message) {
-              // global $messageStack;
-              // $messageStack->reset();
               $messageStack = new messageStack();
               $messageStack->add($message, 'error');
               return $messageStack->output();
@@ -277,9 +278,9 @@ switch ($_GET['action']) {
             }
             ?>
             </div>
-            <!-- <div class="col-sm-6"> -->
+
             <div>
-              Plain Text Email Content
+              <h2>Plain Text Email Content</h2>
             <?php
             $file_contents = '';
             if (!$text_writable) {
@@ -293,14 +294,15 @@ switch ($_GET['action']) {
             }
             ?>
             </div>
-          <!-- </div> -->
 
           <div class="full-width">
             NOTE: This template data node is probably OBSOELTE.  Instead, want to load strings from lang strings file
             e.g. lang.contact_us.php ONLY and allow editing of those fields.
           </div>
+
           <div class="full-width template-data" id="templateDataNode">
           </div>
+
           <div class="full-width">
             NOTE: NEW Want to load strings from lang strings file
             e.g. lang.contact_us.php ONLY and allow editing of those fields.
@@ -308,33 +310,24 @@ switch ($_GET['action']) {
           <div class="full-width template-data" id="stringsBundleNode">
           </div>
 
-          <!-- <div class="row"> -->
-            <!-- <div class="col-sm-12"> -->
             <div class="buttons full-width preview">
-              <button id="regen_previews_button" type="button" class="btn btn-primary"><i class="fa-regular fa-recycle"></i> Regenerate Previews</button>
+              <button id="regen_previews_button" type="button" class="btn btn-primary"><i class="fa-solid fa-recycle"></i> Regenerate Previews</button>
               <label title="Automatically regenerate previews when editors are changed."><input type="checkbox" id="auto_regen_cb"> Auto Regen?</label>
               <div id="syntax_error_display">
                 <h3>Syntax Error in templates</h3>
                 <pre id="syntax_error_message"></pre>
               </div>
             </div>
-          <!-- </div> -->
 
-          <!-- <div class="row"> -->
-            <!-- <div class="col-sm-6"> -->
           <div>
             <h2>HTML Email Preview</h2>
               <iframe id="preview_html"></iframe>
             </div>
-            <!-- <div class="col-sm-6"> -->
             <div>
             <h2>TEXT Email Preview</h2>
               <iframe id="preview_text"></iframe>
-            <!-- </div> -->
           </div>
 
-          <!-- <div class="row"> -->
-            <!-- <div class="col-sm-6 text-right"> -->
           <div class="buttons">
               <?php
               if (!$neither_writable) {
@@ -351,41 +344,9 @@ switch ($_GET['action']) {
               ?>
               <div id="saveFeedbackNode"></div>
             </div>
-            <!-- <div class="col-sm-6">&nbsp;</div> -->
             <!-- <?php echo '</form>'; ?> -->
-            <!-- </div> -->
-          <!-- </div> -->
             <?php
           }
-        } else {
-          // TODO is this whole branch obsolete?
-          $filename = $_SESSION['language'] . '.php';
-          ?>
-          <div class="row">
-            <table class="table">
-              <tr>
-                <td><a href="<?php echo zen_href_link($_GET['filename'], 'lngdir=' . $_SESSION['language'] . '&filename=' . $filename); ?>"><strong><?php echo $filename; ?></strong></a></td>
-                      <?php
-                      $dir = dir(DIR_FS_CATALOG_LANGUAGES . $_SESSION['language']);
-                      $left = false;
-                      if ($dir) {
-                        while ($file = $dir->read()) {
-                          if (preg_match('~^[^\._].*\.php$~i', $file) > 0) {
-                            echo '                <td class="smallText"><a href="' . zen_href_link($_GET['filename'], 'lngdir=' . $_SESSION['language'] . '&filename=' . $file) . '">' . $file . '</a></td>' . "\n";
-                            if (!$left) {
-                              echo '              </tr>' . "\n" .
-                              '              <tr>' . "\n";
-                            }
-                            $left = !$left;
-                          }
-                        }
-                        $dir->close();
-                      }
-                      ?>
-              </tr>
-            </table>
-          </div>
-          <?php
         }
         ?>
       <!-- body_text_eof //-->

@@ -10,12 +10,12 @@
 @if (!empty($coupon_is_valid_for_sales))
     <div class="content-line">{!! $TEXT_COUPON_IS_VALID_FOR_SALES_EMAIL !!}</div>
 @else
-    <div class="content-line">{!! TEXT_NO_COUPON_IS_VALID_FOR_SALES_EMAIL !!}</div>
+    <div class="content-line">{!! $TEXT_NO_COUPON_IS_VALID_FOR_SALES_EMAIL !!}</div>
 @endif
 @if (!empty($coupon_product_count))
     <div class="content-line">{!! $TEXT_COUPON_PRODUCT_COUNT_PER_PRODUCT !!}</div>
 @else
-    <div class="content-line">{!! TEXT_COUPON_PRODUCT_COUNT_PER_ORDER !!}</div>
+    <div class="content-line">{!! $TEXT_COUPON_PRODUCT_COUNT_PER_ORDER !!}</div>
 @endif
     <span class="coupon-desc">{!! $COUPON_DESCRIPTION !!}</span>
   </div>

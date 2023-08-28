@@ -14,7 +14,7 @@ use Illuminate\View\ViewException;
 class zcAjaxEmailEditor extends base
 {
     protected function setCommonFields() {
-        header('Content-Type', 'application/json');
+        header('Content-Type: application/json', true);
     }
 
     // OBSOLETE?
@@ -29,9 +29,22 @@ class zcAjaxEmailEditor extends base
         global $db, $template_dir;
         // Look in same places the LanguageLoader does
 
+        $this->setCommonFields();
         $rootPath = DIR_WS_LANGUAGES;
         $language = $_SESSION['language'];
         $arrayFileName = $_POST['module'];
+        $extraPath = '';
+
+        /**
+         * Sometimes the lang filename matches the email module, other times it is mapped to a different name.
+         * e.g. when admin is sending coupons, it's within the coupon_admin module.
+         */
+        $filenameOverrides = [
+            'coupon' => 'coupon_admin'
+        ];
+        if (array_key_exists($arrayFileName, $filenameOverrides)) {
+            $arrayFileName = $filenameOverrides[$arrayFileName];
+        }
 
 //         $template_dir = 'template_default';
 // $sql = "SELECT template_dir, template_language, template_language=" . (int)$_SESSION['languages_id'] . " AS choice1, template_language=0 AS choice2
@@ -43,19 +56,25 @@ class zcAjaxEmailEditor extends base
 
         $mainFile = $rootPath . $language . $extraPath. '/lang.' . $arrayFileName . '.php';
         $fallbackFile = $rootPath . $language . '/lang.' . $arrayFileName . '.php';
+        $result = [
+            'filename' => null,
+            'strings' => []
+        ];
         if (file_exists($mainFile)) {
-            return $this->parseStringsBundleFile($mainFile);
+            $result['filename'] = $mainFile;
+            $result['strings'] = $this->parseStringsBundleFile($mainFile);
         }
+        return $result;
     }
 
     /**
      * Attempt to read a strings bundle into a simple key=>value list.
      * If any line fails, ignore it, so it's not editable but the rest are.
      *
-     * @param [type] $filename
-     * @return void
+     * @param string $filename
+     * @return array
      */
-    protected function parseStringsBundleFile($filename) {
+    protected function parseStringsBundleFile(string $filename): array {
         $file_lines = file_get_contents($filename);
         $file_lines = explode("\n", $file_lines);
         $results = [];
@@ -73,11 +92,11 @@ class zcAjaxEmailEditor extends base
      * In these cases the exception contains the filename and linenumber of the
      * generated PHP file from the template that failed.
      *
-     * @param [type] $ex
-     * @param [type] $template
-     * @return void
+     * @param ViewException $ex
+     * @param string $template
+     * @return array
      */
-    public function handleExceptionForTemplate(ViewException $ex, string $template)
+    public function handleExceptionForTemplate(ViewException $ex, string $template): array
     {
         // Try to quote context of the error in the generated PHP file, around $ex->line
         $file_contents = file_get_contents($ex->getFile());
@@ -135,13 +154,12 @@ class zcAjaxEmailEditor extends base
             // Alternatively, change the .._from_blade_template function to take template body overrides.
             $templateData = $this->generateTemplateData($module);
             $templateData = $this->sanitiseTemplateData($templateData);
-            // $templateData = [];
-            // $this->object_to_array($payload->template_data, $templateData);
-            // $email = zen_build_html_email_from_blade_template($module, $templateData);
 
             $blade = new Blade(DIR_FS_EMAIL_TEMPLATES, DIR_FS_SQL_CACHE);
             file_put_contents(DIR_FS_EMAIL_TEMPLATES . '/email_template_preview.blade.php', $payload->template_html);
             file_put_contents(DIR_FS_EMAIL_TEMPLATES . '/email_template_preview_text.blade.php', $payload->template_text);
+
+            // $email = zen_build_html_email_from_blade_template($module, $templateData);
 
             // Either template may fail, so wrap each attempt so we can report specifics.
             try {
@@ -163,7 +181,6 @@ class zcAjaxEmailEditor extends base
             'html' => $html_output,
             'text' => $text_output
         ];
-
 
     }
 
@@ -205,7 +222,7 @@ class zcAjaxEmailEditor extends base
     * how the calling code would prepare the template in a real world situation.
     *
     * @param string $module
-    * @return void
+    * @return array
     */
     protected function generateTemplateData(string $module)
     {
@@ -251,14 +268,15 @@ class zcAjaxEmailEditor extends base
 
         if (!empty($lngdir) && !empty($_GET['module'])) {
             $file = $_GET['module'];
-            $html_filename = DIR_FS_EMAIL_TEMPLATES . 'email_template_' . $file . '.blade.php';
-            $text_filename = DIR_FS_EMAIL_TEMPLATES . 'email_template_' . $file . '_text.blade.php';
 
             $this->saveTemplate($payload->template_html, $file, '.blade.php');
             $this->saveTemplate($payload->template_text, $file, '_text.blade.php');
 
             zen_record_admin_activity('Email-Editor was used to save changes to file ' . $file, 'info');
         }
+
+        // http_response_code(200);
+        return [ 'status' => 'OK' ];
     }
 
     protected function saveTemplate($contents, $file, $filename_part)

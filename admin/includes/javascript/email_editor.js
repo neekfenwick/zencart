@@ -67,6 +67,7 @@ jQuery( () => {
      * On page init, load the default template data for the selected email module.
      * This can then be edited before it is used to generate a preview.
      */
+    let stringsFilename;
     function loadStringsBundleData () {
         const name = jQuery('select[name=edit_name]')[0].value;
         const path = pathForTemplate(name);
@@ -76,17 +77,28 @@ jQuery( () => {
         }).then( (response) => {
             console.log('Response: ', response);
 
+            stringsFilename = response.filename; // To be used when saving?
             buildDataInputs('#stringsBundleNode', response);
 
             // Now we have strings data we can generate an initial preview.
             showPreview();
+        }).catch( (response) => {
+            console.error('getStringsBundle error: ', response);
         })
     }
 
-    function buildDataInputs (containerSelector, templateData) {
+    /**
+     * Build inputs and labels to facilitate editing an array of strings.
+     *
+     * @param HTMLNode containerSelector The target parent element
+     * @param object response with filename and strings members.
+     */
+    function buildDataInputs (containerSelector, response) {
+        const stingsAr = response.strings;
         const parent = jQuery(containerSelector);
-        Object.keys(templateData).sort().forEach( (key, idx) => {
-            const value = templateData[key];
+        parent.append(jQuery('<h3>').text(`Editing: ${response.filename}`));
+        Object.keys(stingsAr).sort().forEach( (key, idx) => {
+            const value = stingsAr[key];
             // document.createElement
             let span = jQuery('<span>').text(key)[0];
             parent.append(span);
@@ -105,8 +117,15 @@ jQuery( () => {
         })
     }
 
+    /**
+     * Determine whether we should call the catalog (/) or admin (/admin/) ajax handler
+     * when dealing with templates and strings.
+     *
+     * @param string name Name of the template.
+     * @returns
+     */
     function pathForTemplate (name) {
-        const adminTemplates = [ 'newsletter' ];
+        const adminTemplates = [ 'newsletter', 'coupon', 'gv_mail', 'gv_queue', 'gv_send' ];
         const isAdmin = adminTemplates.indexOf(name) !== -1;
         return isAdmin ? '' : '/';
     }
@@ -235,13 +254,13 @@ jQuery( () => {
         if (!msg) {
             jQuery(saveFeedbackNode).hide();
         } else {
-            jQuery(saveFeedbackNode).text(msg);
+            saveFeedbackNode.innerHTML = msg;
             jQuery(saveFeedbackNode).show();
         }
     }
 
     function saveTemplates (e) {
-        showSaveFeedback('Saving...');
+        showSaveFeedback('<i class="fa-solid fa-gear fa-spin"></i> Saving...');
         const contents = getEditorContents();
         const name = jQuery('select[name=edit_name]')[0].value;
         zcJS.ajax({

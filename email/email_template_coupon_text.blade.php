@@ -13,13 +13,13 @@
 @if (!empty($coupon_is_valid_for_sales))
 {!! $TEXT_COUPON_IS_VALID_FOR_SALES_EMAIL !!}
 @else
-{!! TEXT_NO_COUPON_IS_VALID_FOR_SALES_EMAIL !!}
+{!! $TEXT_NO_COUPON_IS_VALID_FOR_SALES_EMAIL !!}
 @endif
 
 @if (!empty($coupon_product_count))
 {!! $TEXT_COUPON_PRODUCT_COUNT_PER_PRODUCT !!}
 @else
-{!! TEXT_COUPON_PRODUCT_COUNT_PER_ORDER !!}
+{!! $TEXT_COUPON_PRODUCT_COUNT_PER_ORDER !!}
 @endif
 
 {!! $COUPON_TEXT_REMEMBER !!}
