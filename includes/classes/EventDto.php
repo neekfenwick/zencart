@@ -13,6 +13,9 @@ class EventDto
 {
     use Singleton;
 
+    /** All registered hashes. */
+    private $hashes = [];
+    /** Array of eventIDs to arrays of observers. */
     private $observers = [];
 
     public function getObservers()
@@ -20,15 +23,26 @@ class EventDto
         return $this->observers;
     }
 
-    public function setObserver($eventHash, $eventParameters)
+    public function setObserver($eventHash, $eventID, $observer)
     {
-        $this->observers[$eventHash] = $eventParameters;
+        if (array_key_exists($eventHash, $this->hashes)) {
+            return;
+        }
+        $this->hashes[] = $eventHash;
+        if (!array_key_exists($eventID, $this->observers)) {
+            $this->observers[$eventID] = [];
+        }
+        $this->observers[$eventID][] = &$observer;
     }
 
-    public function removeObserver($eventHash)
+    public function removeObserver($eventHash, $eventID, $observer)
     {
-        if (isset($this->observers[$eventHash])) {
-            unset($this->observers[$eventHash]);
+        if (!array_key_exists($eventHash, $this->hashes)) {
+            return;
+        }
+        unset($this->hashes[$eventHash]);
+        if (($key = array_search($observer, $this->observers[$eventID])) !== false) {
+            unset($this->observers[$eventID][$key]);
         }
     }
 }

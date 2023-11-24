@@ -14,7 +14,7 @@ trait NotifierManager
     /**
      * @var array of aliases
      */
-    private $observerAliases = ['NOTIFIY_ORDER_CART_SUBTOTAL_CALCULATE' => 'NOTIFY_ORDER_CART_SUBTOTAL_CALCULATE'];
+    private $observerAliases = ['NOTIFY_ORDER_CART_SUBTOTAL_CALCULATE' => 'NOTIFIY_ORDER_CART_SUBTOTAL_CALCULATE'];
 
     public function getRegisteredObservers()
     {
@@ -48,50 +48,129 @@ trait NotifierManager
         if (empty($observers)) {
             return;
         }
-        foreach ($observers as $key => $obs) {
-            // identify the event
-            $actualEventId = $eventID;
-            $matchMap = [$eventID, '*'];
 
-            // Adjust for aliases
+        // identify the event
+        $actualEventId = $eventID;
+        $matchMap = [$eventID, '*'];
 
-            // if the event fired by the notifier is old and has an alias registered
-            $hasAlias = $this->eventIdHasAlias($obs['eventID']);
-            if ($hasAlias) {
-                // then lookup the correct new event name
-                $eventAlias = $this->substituteAlias($eventID);
-                // use the substituted event name in the list of matches
-                $matchMap = [$eventAlias, '*'];
-                // and set the Actual event to the name that was originally attached to in the observer class
-                $actualEventId = $obs['eventID'];
-            }
-            // check whether the looped observer's eventID is a match to the event or alias
-            if (!in_array($obs['eventID'], $matchMap)) {
-                continue;
+        // Adjust for aliases
+        // if the event fired by the notifier is old and has an alias registered
+        $hasAlias = $this->eventIdHasAlias($eventID);
+        if ($hasAlias) {
+            // then lookup the correct new event name
+            $eventAlias = $this->substituteAlias($eventID);
+            // use the substituted event name in the list of matches
+            $matchMap[] = $eventAlias;
+            // and set the Actual event to the name that was originally attached to in the observer class
+            // $actualEventId = $obs['eventID'];
+        }
+
+        // foreach ($observers as $key => $obs) {
+        foreach ($matchMap as $eventToMatch) {
+            if (!array_key_exists($eventToMatch, $observers)) {
+                continue; // Nothing registered for this eventID
             }
 
             // Notify the listening observers that this event has been triggered
+            $observersToTrigger = $observers[$eventToMatch];
 
-            $methodsToCheck = [];
-            // Check for a snake_cased method name of the notifier Event, ONLY IF it begins with "NOTIFY_" or "NOTIFIER_"
-            $snake_case_method = strtolower($actualEventId);
-            if (preg_match('/^notif(y|ier)_/', $snake_case_method) && method_exists($obs['obs'], $snake_case_method)) {
-                $methodsToCheck[] = $snake_case_method;
-            }
-            // alternates are a camelCased version starting with "update" ie: updateNotifierNameCamelCased(), or just "update()"
-            $methodsToCheck[] = 'update' . \base::camelize(strtolower($actualEventId), true);
-            $methodsToCheck[] = 'update';
+            foreach ($observersToTrigger as $obs) {
 
-            foreach($methodsToCheck as $method) {
-                if (method_exists($obs['obs'], $method)) {
-                    $obs['obs']->{$method}($this, $actualEventId, $param1, $param2, $param3, $param4, $param5, $param6, $param7, $param8, $param9);
-                    continue 2;
+                $methodsToCheck = [];
+                // Check for a snake_cased method name of the notifier Event, ONLY IF it begins with "NOTIFY_" or "NOTIFIER_"
+                $snake_case_method = strtolower($eventToMatch);
+                if (preg_match('/^notif(y|ier)_/', $snake_case_method) && method_exists($obs, $snake_case_method)) {
+                    $methodsToCheck[] = $snake_case_method;
                 }
+                // alternates are a camelCased version starting with "update" ie: updateNotifierNameCamelCased(), or just "update()"
+                $methodsToCheck[] = 'update' . \base::camelize(strtolower($eventToMatch), true);
+                $methodsToCheck[] = 'update';
+
+                foreach ($methodsToCheck as $method) {
+                    if (method_exists($obs, $method)) {
+                        $obs->{$method}($this, $eventToMatch, $param1, $param2, $param3, $param4, $param5, $param6, $param7, $param8, $param9);
+                        continue 2;
+                    }
+                }
+                // If no update handler method exists then trigger an error so the problem is logged
+                $className = (is_object($obs)) ? get_class($obs) : $obs;
+                trigger_error('WARNING: No update() method (or matching alternative) found in the ' . $className . ' class for event ' . $actualEventId, E_USER_WARNING);
             }
-            // If no update handler method exists then trigger an error so the problem is logged
-            $className = (is_object($obs['obs'])) ? get_class($obs['obs']) : $obs['obs'];
-            trigger_error('WARNING: No update() method (or matching alternative) found in the ' . $className . ' class for event ' . $actualEventId, E_USER_WARNING);
         }
+    }
+
+    /**
+     * Call observers listening for CONTENT_* events, so they can produce their output.
+     *
+     * @param string $eventID
+     * @param array $params
+     * @return void
+     */
+    // public function insertContent(string $eventID, $param1 = array(), &$param2 = null, &$param3 = null, &$param4 = null, &$param5 = null, &$param6 = null, &$param7 = null, &$param8 = null, &$param9 = null)
+    public function insertContent(string $eventID, &...$params)
+    {
+        global $l;
+
+        // If the eventID looks like 'define_', just output a define page by that name.
+        if (str_starts_with($eventID, 'define_')) {
+            $this->outputDefinePage($eventID);
+            return;
+        }
+
+        // We may have a registered observer for this eventID...
+        $observers = $this->getRegisteredObservers();
+        if (empty($observers) || !array_key_exists($eventID, $observers)) {
+            return;
+        }
+
+        // Act on each observer registered for this eventID.
+        foreach ($observers[$eventID] as $obs) {
+
+            // If there is a mapping provided from event name to define page, use it and continue.
+            if (!empty($obs->contentDefinePageMap) && array_key_exists($eventID, $obs->contentDefinePageMap)) {
+                $this->outputDefinePage($obs->contentDefinePageMap[$eventID]);
+                continue;
+            }
+
+            // Call the observer's handler function.
+            $snake_case_method = strtolower($eventID);
+            if (method_exists($obs, $snake_case_method)) {
+                $obs->{$snake_case_method}($this, $eventID, $params);
+            } else {
+                // If no update handler method exists then trigger an error so the problem is logged
+                $className = (is_object($obs)) ? get_class($obs) : $obs;
+                trigger_error('WARNING: No handler method found in the ' . $className . ' class for event ' . $eventID, E_USER_WARNING);
+            }
+        }
+    }
+
+    /**
+     * Write out a named define page, wrapping it in a <div class="define-page"> with extra
+     * classes and params defined by arguments.
+     *
+     * @param string $define_page_name The name of the define page, e.g. define_foo_bar.php
+     * @param array|null $classList Any classes to be added to the wrapper e.g. [ 'warning' ]
+     * @param string|null $params Any other params to be inserted into the <div> e.g. "id='foobar'"
+     * @return void
+     */
+    protected function outputDefinePage (string $define_page_name, ?array $classList = [], ?string $params = null) {
+        $define_page = zen_get_file_directory(DIR_WS_LANGUAGES . $_SESSION['language'] . '/html_includes/', $define_page_name, false);
+        if (!file_exists($define_page)) {
+            trigger_error("NotifierManager::outputDefinePage: define page '$define_page' does not exist.");
+            return;
+        }
+        if (empty($classList)) {
+            $classList = [];
+        }
+        if (!empty($params)) {
+            $params = ' ' . $params;
+        }
+        $classList[] = 'define-page';
+        ob_start();
+        echo '<div class="' . implode(' ', $classList) . '"' . $params . '>';
+        require($define_page);
+        echo '</div>';
+        ob_end_flush();
     }
 
     protected function logNotifier($eventID, $param1, $param2, $param3, $param4, $param5, $param6, $param7, $param8, $param9)
@@ -136,6 +215,9 @@ trait NotifierManager
 
     private function substituteAlias($eventId)
     {
-        return array_search($eventId, $this->observerAliases);
+        if (array_key_exists($eventId, $this->observerAliases)) {
+            return $eventId;
+        }
+        return $this->observerAliases[$eventId];
     }
 }

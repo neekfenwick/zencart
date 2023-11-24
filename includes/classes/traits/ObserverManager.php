@@ -26,7 +26,7 @@ trait ObserverManager
     {
         foreach ($eventIDArray as $eventID) {
             $nameHash = md5(get_class($observer) . $eventID);
-            EventDto::getInstance()->setObserver($nameHash, array('obs' => &$observer, 'eventID' => $eventID));
+            EventDto::getInstance()->setObserver($nameHash, $eventID, $observer);
         }
     }
 
@@ -39,7 +39,7 @@ trait ObserverManager
     {
         foreach ($eventIDArray as $eventID) {
             $nameHash = md5(get_class($observer) . $eventID);
-            EventDto::getInstance()->removeObserver($nameHash);
+            EventDto::getInstance()->removeObserver($nameHash, $eventID, $observer);
         }
     }
 
