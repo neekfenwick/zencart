@@ -41,6 +41,15 @@ if (!defined('USE_PCONNECT')) define('USE_PCONNECT', 'false');
   $autoLoadConfig[0][] = array('autoType'=>'classInstantiate',
                                 'className'=>'notifier',
                                 'objectName'=>'zco_notifier');
+  $autoLoadConfig[0][] = [
+    'autoType'=>'class',
+    'loadFile'=>'class.ContentNotifier.php'
+  ];
+  $autoLoadConfig[0][] = [
+    'autoType'=>'classInstantiate',
+    'className'=>'ContentNotifier',
+    'objectName'=>'zcc_notifier'
+  ];
   $autoLoadConfig[0][] = array('autoType'=>'class',
                                 'loadFile'=> 'class.phpmailer.php');
   $autoLoadConfig[0][] = array('autoType'=>'class',

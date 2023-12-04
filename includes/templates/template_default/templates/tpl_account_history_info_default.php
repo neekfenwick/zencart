@@ -18,6 +18,8 @@
 
 <?php }
 
+$zcc_notifier->insertContent('CONTENT_ACCOUNT_HISTORY_INFO_INTRO', $order);
+
 $extra_headings = [];
 $zco_notifier->notify('NOTIFY_ACCOUNT_HISTORY_INFO_EXTRA_COLUMN_HEADING', $order, $extra_headings);
 ?>
